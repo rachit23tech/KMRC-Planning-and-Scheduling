@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KMRL Simulation v13 — Metro Rakes & Maintenance Cars (Tabbed)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial}
+  .tabs{display:flex;gap:.5rem}
+  .tab-btn{padding:.5rem .9rem;border-radius:.5rem;cursor:pointer}
+  .tab-active{background:#1f2937;color:white}
+  .rowWrap{position:relative;margin:22px 0;min-height:110px}
+  .line{position:absolute;height:6px;background:linear-gradient(90deg,#e2e8f0,#cbd5e1);top:50%;left:4%;right:4%;transform:translateY(-50%);border-radius:6px;z-index:0}
+  .station-dot{width:14px;height:14px;border-radius:9999px;display:inline-block;position:absolute;transform:translate(-50%,-50%);z-index:10}
+  .station-label{position:absolute;transform:translateX(-50%);top:68%;font-size:12px;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis;text-align:center}
+  .cars{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none}
+  .car{width:34px;height:20px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;position:absolute;transform:translate(-50%,-50%);transition:left .8s linear,top .3s linear;box-shadow:0 8px 18px rgba(0,0,0,.12);z-index:30;font-size:12px}
+  .train{width:26px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:white;position:absolute;transform:translate(-50%,-50%);transition:left .8s linear;z-index:25;font-size:11px}
+  .battery-bar{height:10px;border-radius:6px;background:#e6e6e6;overflow:hidden}
+  .battery-fill{height:100%;width:0%;background:linear-gradient(90deg,#34d399,#60a5fa);transition:width .6s linear}
+  .cond-icon{font-size:18px;margin-left:6px}
+  .badge{display:inline-block;padding:.2rem .5rem;border-radius:.35rem;background:#111827;color:#fff;font-size:.75rem}
+  .toast{position:fixed;top:18px;right:18px;z-index:100;display:none;padding:10px 14px;border-radius:8px;box-shadow:0 12px 30px rgba(2,6,23,.2)}
+  .hidden{display:none}
+  @media (max-width:900px){ .station-label{font-size:10px} .car{width:28px;height:16px;font-size:10px} .train{width:20px;height:14px;font-size:9px} }
+</style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen">
+
+<nav class="bg-cyan-700 text-white px-6 py-3 flex justify-between items-center shadow-lg">
+  <h1 class="text-xl font-bold">KMRL Smart System-Simulation</h1>
+  <div class="space-x-6">
+    <a href="kmrc_v5_plus_inspection.html" class="hover:underline">Dashboard</a>
+    <a href="kmrc_inspectv4.html" class="hover:underline">Inspection</a>
+    <a href="kmrc_simulation.html" class="hover:underline">Simulation</a>
+    <a href="kmrc_rake_maintenance.html" class="hover:underline">Rake Maintainance</a>
+    <button id="darkModeToggle"
+      class="ml-4 bg-gray-200 dark:bg-gray-700 dark:text-gray-100 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+      🌙 Dark
+    </button>
+  </div>
+</nav>
+
+<main class="container mx-auto p-6">
+  <header class="mb-4">
+    <h1 class="text-2xl font-bold text-slate-800 text-white">Simulation Control Center — Tabbed</h1>
+    <p class="text-gray-600 mt-1 text-white">Switch between Metro Rakes and Maintenance Cars to test different scenarios and conditions.</p>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs mb-4">
+    <button id="tabMetro" class="tab-btn tab-active bg-white text-indigo-700 border border-indigo-700">Metro Rakes 🚇</button>
+    <button id="tabMaint" class="tab-btn bg-white text-gray-700 border">Maintenance Cars 🛠️</button>
+  </div>
+
+  <!-- CONTENT: Metro Rakes -->
+  <section id="metroPanel" class="bg-white p-4 rounded-xl shadow mb-6">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <!-- Controls -->
+      <div class="lg:col-span-1">
+        <h3 class="font-semibold">Metro Controls</h3>
+
+        <div class="mt-3">
+          <label class="font-medium">Rakes Available: <span id="rakesVal" class="badge ml-2">25</span></label>
+          <input id="rakesSlider" type="range" min="1" max="25" value="25" class="w-full mt-2">
+          <div class="text-xs text-gray-500 mt-1">Adjust number of active rakes (1–25)</div>
+        </div>
+
+        <div class="mt-3">
+          <label class="font-medium">Passenger Density: <span id="densityVal" class="badge ml-2">50%</span></label>
+          <input id="densitySlider" type="range" min="0" max="100" value="50" class="w-full mt-2">
+          <div class="text-xs text-gray-500 mt-1">0% empty → 100% crush load</div>
+        </div>
+
+        <div class="mt-3">
+          <label class="font-medium">Peak Mode</label>
+          <select id="peakMode" class="w-full border rounded px-2 py-1 mt-2">
+            <option value="auto">Auto (based on clock)</option>
+            <option value="peak">Force Peak (8-11 & 17-21)</option>
+            <option value="off">Off (always off-peak)</option>
+          </select>
+          <div class="text-xs text-gray-500 mt-1">Control peak/off-peak behavior</div>
+        </div>
+
+        <div class="mt-4 border-t pt-3">
+          <div class="flex items-center justify-between">
+            <div><strong>Calculated Interval</strong></div>
+            <div><span id="intervalVal" class="badge">5.0 min</span></div>
+          </div>
+          <div class="text-xs text-gray-500 mt-1">Headway adjusts with rake count & passenger density</div>
+        </div>
+
+        <div class="mt-3">
+          <button id="startMetro" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 mt-2">Start Metro Simulation</button>
+          <button id="pauseMetro" class="w-full bg-gray-200 text-gray-800 py-2 rounded mt-2 hover:bg-gray-300">Pause</button>
+          <button id="resetMetro" class="w-full bg-red-500 text-white py-2 rounded mt-2 hover:bg-red-600">Reset</button>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="lg:col-span-2">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">Mini Map — Metro Rakes</h3>
+          <div id="metroIcons" class="text-sm text-gray-600"></div>
+        </div>
+        <div id="metroMap" class="bg-gray-50 rounded p-3">
+          <div id="metroRows"></div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">Trains shown moving along the three stacked rows. Interval displayed above is in minutes (demo speed scales movement).</div>
+      </div>
+
+      <!-- Logs -->
+      <aside class="lg:col-span-1">
+        <h3 class="font-semibold">Metro Logs</h3>
+        <div id="metroLog" class="bg-gray-900 text-green-100 p-3 rounded h-64 overflow-y-auto text-sm font-mono mt-2">
+          <div>[System] Metro module ready.</div>
+        </div>
+        <div class="mt-2 flex gap-2">
+          <button id="clearMetroLog" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded">Clear</button>
+          <button id="exportMetroLog" class="bg-indigo-600 text-white py-2 px-3 rounded">Export</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- CONTENT: Maintenance Cars -->
+  <section id="maintPanel" class="hidden bg-white p-4 rounded-xl shadow mb-6">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <!-- Conditions & Controls (left) -->
+      <div class="lg:col-span-1">
+        <h3 class="font-semibold">Maintenance Conditions Panel</h3>
+
+        <div class="pt-2">
+          <label class="flex items-center justify-between"><span>Rain</span><input id="rainToggle" type="checkbox" class="ml-2"></label>
+          <input id="rainIntensity" type="range" min="0" max="100" value="20" class="w-full mt-2">
+        </div>
+
+        <div class="mt-2">
+          <label class="flex items-center justify-between"><span>Thunderstorm</span><input id="thunderToggle" type="checkbox" class="ml-2"></label>
+        </div>
+
+        <div class="mt-3">
+          <label>Solar Efficiency: <span id="solarVal" class="badge ml-2">100%</span></label>
+          <input id="solarSlider" type="range" min="10" max="100" value="100" class="w-full mt-2">
+        </div>
+
+        <div class="mt-3">
+          <label class="flex items-center justify-between"><span>Depot Congestion</span><input id="congestionToggle" type="checkbox" class="ml-2"></label>
+        </div>
+
+        <div class="mt-3">
+          <label>Crew Availability: <span id="crewVal" class="badge ml-2">100%</span></label>
+          <input id="crewSlider" type="range" min="0" max="100" value="100" class="w-full mt-2">
+        </div>
+
+        <div class="mt-3">
+          <label>Comm Reliability: <span id="commVal" class="badge ml-2">100%</span></label>
+          <input id="commSlider" type="range" min="0" max="100" value="100" class="w-full mt-2">
+        </div>
+
+        <div class="mt-3">
+          <label>Battery Health: <span id="batHealthVal" class="badge ml-2">100%</span></label>
+          <input id="batHealthSlider" type="range" min="60" max="100" value="100" class="w-full mt-2">
+        </div>
+
+        <div class="mt-2">
+          <label class="flex items-center justify-between"><span>Random Anomalies</span><input id="anomalyToggle" type="checkbox" class="ml-2"></label>
+          <label class="flex items-center justify-between mt-2"><span>Track Blockage</span><input id="blockToggle" type="checkbox" class="ml-2"></label>
+          <label class="flex items-center justify-between mt-2"><span>Multi-Fault Mode</span><input id="multiFaultToggle" type="checkbox" class="ml-2"></label>
+        </div>
+
+        <div class="mt-3">
+          <label>Manual Skip (station)</label>
+          <select id="manualSkip" class="w-full border rounded px-2 py-1 mt-2"></select>
+        </div>
+
+        <div class="mt-4 border-t pt-3">
+          <button id="startMaint" class="w-full bg-green-600 text-white py-2 rounded mt-2 hover:bg-green-700">Start Maintenance Simulation</button>
+          <button id="pauseMaint" class="w-full bg-gray-200 text-gray-800 py-2 rounded mt-2 hover:bg-gray-300">Pause</button>
+          <button id="resetMaint" class="w-full bg-red-500 text-white py-2 rounded mt-2 hover:bg-red-600">Reset</button>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="lg:col-span-2">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="font-semibold">Map — Maintenance Cars</h3>
+          <div id="maintIcons" class="text-sm text-gray-600"></div>
+        </div>
+        <div id="maintMap" class="bg-gray-50 rounded p-3">
+          <div id="maintRows"></div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">MC-01 runs scheduled sweeps; MC-02 handles major repairs when dispatched.</div>
+      </div>
+
+      <!-- Logs -->
+      <aside class="lg:col-span-1">
+        <h3 class="font-semibold">Maintenance Logs</h3>
+        <div id="maintLog" class="bg-gray-900 text-green-100 p-3 rounded h-64 overflow-y-auto text-sm font-mono mt-2">
+          <div>[System] Maintenance module ready.</div>
+        </div>
+        <div class="mt-2 flex gap-2">
+          <button id="clearMaintLog" class="flex-1 bg-gray-200 text-gray-800 py-2 rounded">Clear</button>
+          <button id="exportMaintLog" class="bg-indigo-600 text-white py-2 px-3 rounded">Export</button>
+        </div>
+        <div class="mt-3">
+          <button id="triggerFaultMaint" class="w-full mt-2 bg-yellow-500 text-black py-2 rounded hover:bg-yellow-600">Trigger Fault at MC-01</button>
+          <button id="dispatchMaint" class="w-full mt-2 bg-orange-500 text-black py-2 rounded hover:bg-orange-600">Dispatch MC-02 to MC-01</button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Alert Banner & Sound (shared) -->
+  <div id="alertBanner" class="hidden fixed top-0 left-0 right-0 bg-red-600 text-white font-bold text-center py-3 z-50 shadow-lg">
+    🚨 Fault Detected: <span id="alertMsg"></span>
+    <button onclick="dismissAlert()" class="ml-4 bg-white text-red-600 px-3 py-1 rounded">Dismiss</button>
+  </div>
+  <audio id="alertSound"><source src="https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg" type="audio/ogg"></audio>
+  <footer class="text-center py-4">
+        <p class="text-sm text-gray-500">© 2025 OnTrack. All Rights Reserved.</p>
+    </footer>
+
+</main>
+
+<!-- small toast area -->
+<div id="toast" class="toast bg-yellow-50 text-yellow-800 border border-yellow-200"></div>
+
+<script>
+/* ---------------------------
+   v13 Combined Simulation
+   - Metro Rakes Mode (tab 1)
+   - Maintenance Cars Mode (tab 2)
+   --------------------------- */
+
+/* Stations (linear) */
+const stationsLinear = [
+  "Aluva","Pulinchodu","Companypady","Ambattukavu","Muttom Depot","Kalamassery",
+  "CUSAT","Pathadipalam","Edapally","Changampuzha Park","Palarivattom",
+  "J. L. N. Stadium","Kaloor","Town Hall","M. G. Road","Maharaja's College",
+  "Ernakulam South","Kadavanthra","Elamkulam","Vyttila","Thaikoodam",
+  "Pettah","Vadakkekotta","SN Junction","Thrippunithura"
+];
+const row1 = stationsLinear.slice(0,9), row2 = stationsLinear.slice(9,17), row3 = stationsLinear.slice(17);
+const rows = [row1,row2,row3];
+const shortNames = {"Aluva":"Aluva","Pulinchodu":"P'chodu","Companypady":"C'pady","Ambattukavu":"Amb","Muttom Depot":"Depot",
+  "Kalamassery":"Klmry","CUSAT":"CUSAT","Pathadipalam":"P'dipal","Edapally":"Edpy","Changampuzha Park":"Ch'Park",
+  "Palarivattom":"P'vatom","J. L. N. Stadium":"Stadium","Kaloor":"Kaloor","Town Hall":"Town","M. G. Road":"MG Rd",
+  "Maharaja's College":"M'jra","Ernakulam South":"EKM S","Kadavanthra":"Kadav","Elamkulam":"Elam","Vyttila":"Vyttila",
+  "Thaikoodam":"Thaik","Pettah":"Pettah","Vadakkekotta":"Vdkotta","SN Junction":"SN Jn","Thrippunithura":"Tripunithura"
+};
+const depotIdx = stationsLinear.indexOf('Muttom Depot');
+const firstIdx = 0, lastIdx = stationsLinear.length -1;
+
+/* Utility: DOM references */
+const tabMetro = document.getElementById('tabMetro'), tabMaint = document.getElementById('tabMaint');
+const metroPanel = document.getElementById('metroPanel'), maintPanel = document.getElementById('maintPanel');
+const metroMap = document.getElementById('metroRows'), maintMap = document.getElementById('maintRows');
+const metroLog = document.getElementById('metroLog'), maintLog = document.getElementById('maintLog');
+const toast = document.getElementById('toast');
+
+/* Render function for both maps (stacked rows) */
+let metroPositions = {}, maintPositions = {};
+function renderMapRows(containerEl, positionsStore){
+  containerEl.innerHTML = '';
+  rows.forEach((rowArr, ri) => {
+    const wrap = document.createElement('div'); wrap.className='rowWrap relative bg-white rounded p-3 mb-2';
+    const line = document.createElement('div'); line.className='line'; wrap.appendChild(line);
+    const count = rowArr.length - 1;
+    rowArr.forEach((st, i) => {
+      const leftPct = 4 + (i / Math.max(1, count)) * 92;
+      positionsStore[st] = { row: ri, left: leftPct };
+      const dot = document.createElement('div'); dot.className='station-dot'; dot.title = st; dot.style.left = leftPct+'%'; dot.style.top='50%';
+      dot.style.background = (st === 'Muttom Depot') ? '#4b5563' : '#22c55e';
+      wrap.appendChild(dot);
+      const lbl = document.createElement('div'); lbl.className='station-label text-xs text-gray-700'; lbl.style.left=leftPct+'%';
+      lbl.textContent = shortNames[st] || st; lbl.title = st; wrap.appendChild(lbl);
+    });
+    const cars = document.createElement('div'); cars.className='cars'; wrap.appendChild(cars);
+    containerEl.appendChild(wrap);
+  });
+}
+renderMapRows(metroMap, metroPositions);
+renderMapRows(maintMap, maintPositions);
+
+/* ---------------------------
+   TAB SWITCHING
+   --------------------------- */
+tabMetro.addEventListener('click', ()=>{
+  tabMetro.classList.add('tab-active'); tabMaint.classList.remove('tab-active');
+  metroPanel.classList.remove('hidden'); maintPanel.classList.add('hidden');
+});
+tabMaint.addEventListener('click', ()=>{
+  tabMaint.classList.add('tab-active'); tabMetro.classList.remove('tab-active');
+  maintPanel.classList.remove('hidden'); metroPanel.classList.add('hidden');
+});
+
+/* ---------------------------
+   Shared utilities
+   --------------------------- */
+function nowTime(){ return new Date().toLocaleTimeString(); }
+function metroLogMsg(msg){ metroLog.innerHTML = `<div>[${nowTime()}] ${msg}</div>` + metroLog.innerHTML; }
+function maintLogMsg(msg){ maintLog.innerHTML = `<div>[${nowTime()}] ${msg}</div>` + maintLog.innerHTML; }
+function toastMsg(msg, color='yellow'){ toast.textContent = msg; toast.style.display='block'; toast.className='toast ' + (color==='red'?'bg-red-50 text-red-800 border border-red-200':'bg-yellow-50 text-yellow-800 border border-yellow-200'); setTimeout(()=>toast.style.display='none',3000); }
+function showAlert(msg){ document.getElementById('alertMsg').textContent = msg; const delay = Math.round((100 - parseInt(document.getElementById('commSlider')?.value||100))/10)*1000; if(delay>0){ maintLogMsg(`[Comm] Alert delayed ${delay/1000}s`); setTimeout(()=>document.getElementById('alertBanner').classList.remove('hidden'),delay);} else document.getElementById('alertBanner').classList.remove('hidden'); document.getElementById('alertSound').play().catch(()=>{}); }
+function dismissAlert(){ document.getElementById('alertBanner').classList.add('hidden'); }
+
+/* ---------------------------
+   METRO MODE
+   --------------------------- */
+const metro = {
+  trains: [], // {id, posIdx (linear index), direction (1 forward, -1 back), enabled}
+  rakesAvailable: 25,
+  passengerDensity: 50,
+  peakMode: 'auto', // auto/peak/off
+  intervalMin: 5.0, // display minutes
+  // demo speed - how many ms per minute of headway (scale factor). smaller => faster demo
+  demoMsPerMinute: 800,
+  running: false,
+  spawnTimer: null
+};
+
+/* Headway formula specified:
+   - 25 rakes => 5 min
+   - 16 rakes => 8 min
+   - <16 => increases further
+   Implement as:
+   if r >= 25 -> 5
+   elif r >=16 -> 5 + (25 - r) * (3/9)  // linear 5->8 between 25 and 16
+   else -> 8 + (16 - r)*1.2
+   Then adjust slightly by passenger density:
+     - density > 80 => reduce interval by upto 15% (if enough rakes)
+     - density < 30 => increase interval by 10%
+*/
+function calculateHeadwayMinutes(rakes, density){
+  let interval;
+  if(rakes >= 25) interval = 5.0;
+  else if(rakes >= 16) interval = 5 + (25 - rakes) * (3/9);
+  else interval = 8 + (16 - rakes) * 1.2;
+  // density effect
+  if(density >= 80) interval *= 0.87; // shorten by ~13%
+  else if(density <= 30) interval *= 1.10; // increase by 10%
+  // clamp sensible min
+  interval = Math.max(2.5, interval);
+  return Math.round(interval*10)/10;
+}
+
+/* Metro log helpers */
+function updateMetroUI(){
+  document.getElementById('rakesVal').textContent = metro.rakesAvailable;
+  document.getElementById('densityVal').textContent = metro.passengerDensity + '%';
+  metro.intervalMin = calculateHeadwayMinutes(metro.rakesAvailable, metro.passengerDensity);
+  document.getElementById('intervalVal').textContent = metro.intervalMin + ' min';
+  // icon area
+  document.getElementById('metroIcons').innerHTML = `Rakes: <span class="badge">${metro.rakesAvailable}</span> Density: <span class="badge">${metro.passengerDensity}%</span>`;
+}
+
+/* Metro map visual helpers */
+function placeMetroTrains(){
+  // clear containers
+  document.querySelectorAll('#metroRows .cars').forEach(c=>c.innerHTML='');
+  // place each train
+  metro.trains.forEach((t, i) => {
+    const st = stationsLinear[t.posIdx];
+    const pos = metroPositions[st];
+    if(!pos) return;
+    const rowWrap = metroMap.children[pos.row];
+    const container = rowWrap.querySelector('.cars');
+    const el = document.createElement('div');
+    el.className = 'train'; el.style.left = pos.left + '%'; el.style.top = (i%2===0 ? '30%' : '70%');
+    el.style.background = '#0ea5e9'; el.textContent = 'T' + t.id;
+    container.appendChild(el);
+  });
+}
+
+/* Spawn trains so they are roughly spaced by headway across the line.
+   For demo, we spawn 'rakesAvailable' trains but we show at most (rakesAvailable)
+   and let them circulate in a simple loop:
+     - trains move forward by 1 index each step until lastIdx, then reverse
+   Movement tick is determined by headway converted to ms (demoMsPerMinute).
+*/
+let metroMovementTimer = null;
+function startMetro(){
+  if(metro.running) { metroLogMsg('Metro already running'); return; }
+  metro.running = true;
+  // initialize trains array - keep count = rakesAvailable but cap to reasonable (<=25)
+  metro.trains = [];
+  for(let i=0;i<metro.rakesAvailable;i++){
+    // distribute initial positions evenly along line
+    const posIdx = Math.round((i / Math.max(1, metro.rakesAvailable)) * lastIdx);
+    metro.trains.push({ id: i+1, posIdx: posIdx, dir: 1, enabled: true });
+  }
+  placeMetroTrains();
+  metroLogMsg(`Started Metro simulation with ${metro.rakesAvailable} rakes, density ${metro.passengerDensity}% — interval ${metro.intervalMin} min`);
+  // movement timer
+  const headwayMs = Math.max(500, metro.intervalMin * metro.demoMsPerMinute);
+  metroMovementTimer = setInterval(()=>{
+    // move each train one step according to direction. We can randomize dwell at stations slightly
+    metro.trains.forEach(t=>{
+      if(Math.random() < 0.05) { /* small chance to dwell this tick */ return; }
+      if(t.dir === 1){
+        if(t.posIdx < lastIdx) t.posIdx++;
+        else t.dir = -1;
+      } else {
+        if(t.posIdx > firstIdx) t.posIdx--;
+        else t.dir = 1;
+      }
+    });
+    placeMetroTrains();
+    // occasionally log crowding warnings when density high
+    if(metro.passengerDensity > 85 && Math.random() < 0.12){
+      metroLogMsg(`[Crowd] High passenger density ${metro.passengerDensity}% — consider more rakes.`);
+    }
+  }, headwayMs);
+}
+
+function pauseMetro(){
+  if(!metro.running) { metroLogMsg('Metro not running'); return; }
+  metro.running = false;
+  clearInterval(metroMovementTimer);
+  metroLogMsg('Metro paused');
+}
+
+function resetMetro(){
+  pauseMetro();
+  metro.trains = [];
+  renderMapRows(metroMap, metroPositions);
+  placeMetroTrains();
+  metroLogMsg('Metro reset');
+}
+
+/* UI wiring for metro */
+document.getElementById('rakesSlider').addEventListener('input', (e)=>{
+  metro.rakesAvailable = parseInt(e.target.value,10);
+  document.getElementById('rakesVal').textContent = metro.rakesAvailable;
+  updateMetroUI();
+  metroLogMsg(`Rakes changed -> ${metro.rakesAvailable}. Interval updated to ${metro.intervalMin} min`);
+});
+document.getElementById('densitySlider').addEventListener('input', (e)=>{
+  metro.passengerDensity = parseInt(e.target.value,10);
+  document.getElementById('densityVal').textContent = metro.passengerDensity + '%';
+  updateMetroUI();
+  metroLogMsg(`Passenger density set to ${metro.passengerDensity}% -> interval ${metro.intervalMin} min`);
+});
+document.getElementById('peakMode').addEventListener('change', (e)=> metro.peakMode = e.target.value);
+document.getElementById('startMetro').addEventListener('click', ()=> {
+  updateMetroUI();
+  startMetro();
+});
+document.getElementById('pauseMetro').addEventListener('click', pauseMetro);
+document.getElementById('resetMetro').addEventListener('click', ()=> {
+  resetMetro();
+  metro.trains = [];
+  updateMetroUI();
+});
+
+/* export & clear metro logs */
+document.getElementById('clearMetroLog').addEventListener('click', ()=> metroLog.innerHTML = '');
+document.getElementById('exportMetroLog').addEventListener('click', ()=>{
+  const blob = new Blob([metroLog.innerText], {type:'text/plain'}); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'metro_log.txt'; a.click(); URL.revokeObjectURL(url);
+});
+
+/* ---------------------------
+   MAINTENANCE MODE (derived & simplified from v11)
+   --------------------------- */
+const maint = {
+  mc01: { idx: depotIdx, onRun:false, phase:null, timer:null },
+  mc02: { idx: depotIdx, moving:false, target:null },
+  battery: { mc01: 100, mc02: 100 },
+  config: { batteryDrainPerStation:0.5, batteryMinToStart:20, solarBaseChargePerTick:3.0, chargeTickIntervalSec:3, moveIntervalMs:2000 },
+  scheduleTimes: [ {h:5,m:30},{h:13,m:0},{h:16,m:30} ],
+  cond: { // default conditions (wired to UI)
+    rain:false, rainIntensity:20, thunder:false, solarEff:100, congestion:false,
+    crewAvail:100, commReliability:100, batHealth:100, anomalies:false, blockage:false, multiFault:false, manualSkip:''
+  },
+  running: false
+};
+
+/* populate manual skip dropdown in maint panel */
+const manualSkipEl = document.getElementById('manualSkip');
+stationsLinear.forEach(s=>{ const opt = document.createElement('option'); opt.value = s; opt.textContent = s; manualSkipEl.appendChild(opt); });
+
+/* render maintenance cars on maintMap */
+function placeMaintCars(){
+  document.querySelectorAll('#maintRows .cars').forEach(c=>c.innerHTML='');
+  const s1 = stationsLinear[maint.mc01.idx], s2 = stationsLinear[maint.mc02.idx];
+  const pos1 = maintPositions[s1], pos2 = maintPositions[s2];
+  if(pos1){ const rowWrap1 = maintMap.children[pos1.row]; const c1 = rowWrap1.querySelector('.cars'); const el = document.createElement('div'); el.className='car'; el.style.left=pos1.left+'%'; el.style.top='36%'; el.style.background='#2563eb'; el.textContent='01'; c1.appendChild(el); }
+  if(pos2){ const rowWrap2 = maintMap.children[pos2.row]; const c2 = rowWrap2.querySelector('.cars'); const el2 = document.createElement('div'); el2.className='car'; el2.style.left=pos2.left+'%'; el2.style.top='64%'; el2.style.background='#f59e0b'; el2.style.color='#111'; el2.textContent='02'; c2.appendChild(el2); }
+}
+
+/* maintenance logs */
+function mlog(m){ maintLogMsg(m); }
+function maintLogMsg(msg){ maintLog.innerHTML = `<div>[${nowTime()}] ${msg}</div>` + maintLog.innerHTML; }
+
+/* read conditions UI -> maint.cond */
+function readMaintConditions(){
+  maint.cond.rain = document.getElementById('rainToggle').checked;
+  maint.cond.rainIntensity = parseInt(document.getElementById('rainIntensity').value,10);
+  maint.cond.thunder = document.getElementById('thunderToggle').checked;
+  maint.cond.solarEff = parseInt(document.getElementById('solarSlider').value,10);
+  document.getElementById('solarVal').textContent = maint.cond.solarEff + '%';
+  maint.cond.congestion = document.getElementById('congestionToggle').checked;
+  maint.cond.crewAvail = parseInt(document.getElementById('crewSlider').value,10);
+  document.getElementById('crewVal').textContent = maint.cond.crewAvail + '%';
+  maint.cond.commReliability = parseInt(document.getElementById('commSlider').value,10);
+  document.getElementById('commVal').textContent = maint.cond.commReliability + '%';
+  maint.cond.batHealth = parseInt(document.getElementById('batHealthSlider').value,10);
+  document.getElementById('batHealthVal').textContent = maint.cond.batHealth + '%';
+  maint.cond.anomalies = document.getElementById('anomalyToggle').checked;
+  maint.cond.blockage = document.getElementById('blockToggle').checked;
+  maint.cond.multiFault = document.getElementById('multiFaultToggle').checked;
+  maint.cond.manualSkip = document.getElementById('manualSkip').value;
+}
+
+/* show condition icons */
+function updateMaintIcons(){
+  const icons = [];
+  if(maint.cond.rain) icons.push('🌧️');
+  if(maint.cond.thunder) icons.push('⛈️');
+  if(maint.cond.blockage) icons.push('🚧');
+  if(maint.cond.anomalies) icons.push('⚠️');
+  document.getElementById('maintIcons').innerHTML = icons.join(' ');
+}
+
+/* charging tick (demo-friendly, charges whenever car idle at depot) */
+function maintEffectiveChargePerTick(){
+  let base = maint.config.solarBaseChargePerTick * (maint.cond.solarEff/100);
+  if(maint.cond.congestion && maint.mc01.idx === depotIdx && maint.mc02.idx === depotIdx && !maint.mc01.onRun && !maint.mc02.moving) base *= 0.5;
+  return base;
+}
+function maintChargingTick(){
+  const charge = maintEffectiveChargePerTick();
+  if(maint.mc01.idx === depotIdx && !maint.mc01.onRun){
+    const prev = Math.floor(maint.battery.mc01);
+    const maxCap = (maint.cond.batHealth/100)*100;
+    maint.battery.mc01 = Math.min(maxCap, maint.battery.mc01 + charge);
+    if(Math.floor(maint.battery.mc01) !== prev) mlog(`MC-01 charging at depot -> ${Math.round(maint.battery.mc01)}%`);
+  }
+  if(maint.mc02.idx === depotIdx && !maint.mc02.moving){
+    const prev2 = Math.floor(maint.battery.mc02);
+    const maxCap = (maint.cond.batHealth/100)*100;
+    maint.battery.mc02 = Math.min(maxCap, maint.battery.mc02 + charge);
+    if(Math.floor(maint.battery.mc02) !== prev2) mlog(`MC-02 charging at depot -> ${Math.round(maint.battery.mc02)}%`);
+  }
+}
+
+/* MC-01 run start logic */
+function canStartMaintRun(){
+  return maint.battery.mc01 >= Math.max(maint.config.batteryMinToStart, 20);
+}
+function startMaintRun(){
+  if(maint.mc01.onRun) { mlog('MC-01 already running'); return; }
+  if(!canStartMaintRun()){ mlog('MC-01 battery too low to start'); toastMsg('MC-01 battery low','red'); return; }
+  maint.mc01.onRun = true; maint.mc01.idx = depotIdx; maint.mc01.phase = 'toAluva';
+  mlog('MC-01 departing depot for full inspection run');
+  if(maint.mc01.timer) clearInterval(maint.mc01.timer);
+  maint.mc01.timer = setInterval(()=>{ maintStep(); placeMaintCars(); }, maint.config.moveIntervalMs);
+}
+function finishMaintRun(){
+  if(maint.mc01.timer){ clearInterval(maint.mc01.timer); maint.mc01.timer = null; }
+  maint.mc01.onRun = false; maint.mc01.phase = null; maint.mc01.idx = depotIdx;
+  mlog('MC-01 completed full run and returned to depot');
+}
+
+/* single step for MC-01 */
+function maintStep(){
+  if(maint.cond.blockage && Math.random()<0.02){ mlog('[Blockage] Temporary blockage delayed MC-01 this tick'); return; }
+  if(maint.mc01.phase === 'toAluva'){ if(maint.mc01.idx > firstIdx) maint.mc01.idx--; if(maint.mc01.idx===firstIdx){ maint.mc01.phase='toTerminal'; mlog('MC-01 reached Aluva; proceeding to terminal'); } }
+  else if(maint.mc01.phase === 'toTerminal'){ if(maint.mc01.idx < lastIdx) maint.mc01.idx++; if(maint.mc01.idx===lastIdx){ maint.mc01.phase='backToAluva'; mlog('MC-01 reached terminal; returning downline'); } }
+  else if(maint.mc01.phase === 'backToAluva'){ if(maint.mc01.idx > firstIdx) maint.mc01.idx--; if(maint.mc01.idx===firstIdx){ maint.mc01.phase='backToDepot'; mlog('MC-01 at Aluva; heading back to depot'); } }
+  else if(maint.mc01.phase === 'backToDepot'){ if(maint.mc01.idx < depotIdx) maint.mc01.idx++; else if(maint.mc01.idx > depotIdx) maint.mc01.idx--; if(maint.mc01.idx === depotIdx){ finishMaintRun(); return; } }
+
+  // battery drain
+  let drain = maint.config.batteryDrainPerStation;
+  if(maint.cond.anomalies && Math.random()<0.04){ drain *= 2.5; mlog('[Anomaly] Sudden drain on MC-01'); }
+  maint.battery.mc01 = Math.max(0, maint.battery.mc01 - drain);
+  mlog(`MC-01 arrived at ${stationsLinear[maint.mc01.idx]} (bat ${Math.round(maint.battery.mc01)}%)`);
+
+  // manual skip
+  if(maint.cond.manualSkip && maint.cond.manualSkip === stationsLinear[maint.mc01.idx]){ mlog(`[Manual Override] Skipping inspection at ${maint.cond.manualSkip}`); maint.cond.manualSkip = ''; document.getElementById('manualSkip').value=''; return; }
+
+  // fault probabilty influenced by conditions
+  let base = 0.06;
+  if(maint.cond.rain) base += (maint.cond.rainIntensity/100)*0.06;
+  if(maint.cond.thunder) base += 0.04;
+  if(maint.cond.multiFault) base *= 1.6;
+  if(Math.random() < base){
+    // decide type
+    const wireBias = maint.cond.thunder ? 0.6 : 0.35;
+    const majorProb = 0.22;
+    const isWire = Math.random() < wireBias;
+    const isMajor = Math.random() < majorProb;
+    const type = (isMajor?'major':'minor')+'-'+(isWire?'wire':'track');
+    mlog(`[Fault] Detected ${type} at ${stationsLinear[maint.mc01.idx]}`);
+    if(type.startsWith('minor')){
+      maint.battery.mc01 = Math.max(0, maint.battery.mc01 - 0.8);
+      // alert log only
+      mlog(`[Repair] Minor fault fixed by MC-01 at ${stationsLinear[maint.mc01.idx]}`);
+    } else {
+      maint.activeFault = { idx: maint.mc01.idx, type };
+      showAlert(`Major fault at ${stationsLinear[maint.mc01.idx]} — MC-02 dispatched`);
+      // dispatch MC-02 taking into account crew availability
+      const crewFactor = maint.cond.crewAvail / 100;
+      const delayMs = Math.round((1 - crewFactor) * 10000);
+      if(delayMs>0) mlog(`[Crew] Dispatch delay ${Math.round(delayMs/1000)}s due to crew ${maint.cond.crewAvail}%`);
+      setTimeout(()=>{ if(document.getElementById('autoDispatchToggle').checked) maintDispatchMC02(maint.mc01.idx, 'Auto'); else mlog('Auto-dispatch OFF'); }, delayMs);
+    }
+  }
+}
+
+/* MC-02 dispatch */
+function maintDispatchMC02(idx, reason='Manual'){
+  if(maint.mc02.moving){ mlog('MC-02 busy'); return; }
+  if(maint.battery.mc02 < maint.config.batteryMinToStart){ mlog('MC-02 battery too low'); return; }
+  maint.mc02.moving = true; maint.mc02.target = idx;
+  mlog(`MC-02 dispatched (${reason}) to ${stationsLinear[idx]}`);
+  const goto = setInterval(()=>{
+    if(maint.mc02.idx < idx) maint.mc02.idx++;
+    else if(maint.mc2idx && maint.mc2idx > idx) maint.mc02.idx--;
+    else if(maint.mc02.idx > idx) maint.mc02.idx--;
+    placeMaintCars();
+    maint.battery.mc02 = Math.max(0, maint.battery.mc02 - (maint.config.batteryDrainPerStation*0.8));
+    mlog(`MC-02 transit at ${stationsLinear[maint.mc02.idx]} (bat ${Math.round(maint.battery.mc02)}%)`);
+    if(maint.mc02.idx === idx){
+      clearInterval(goto);
+      mlog(`MC-02 arrived at ${stationsLinear[idx]} — repairing...`);
+      const crewFactor = maint.cond.crewAvail / 100;
+      const repairTime = Math.max(1500, Math.round(3000 / (crewFactor || 0.2)));
+      setTimeout(()=>{
+        mlog(`MC-02 finished repair at ${stationsLinear[idx]}. Returning to depot.`);
+        maint.activeFault = null;
+        const ret = setInterval(()=>{
+          if(maint.mc02.idx < depotIdx) maint.mc02.idx++;
+          else if(maint.mc02.idx > depotIdx) maint.mc02.idx--;
+          placeMaintCars();
+          maint.battery.mc02 = Math.max(0, maint.battery.mc02 - 0.6);
+          if(maint.mc02.idx === depotIdx){
+            clearInterval(ret);
+            maint.mc02.moving = false; maint.mc02.target = null;
+            mlog('MC-02 back at depot.');
+          }
+        },700);
+      }, repairTime);
+    }
+  },700);
+}
+
+/* UI wiring for maintenance */
+['rainToggle','rainIntensity','thunderToggle','solarSlider','congestionToggle','crewSlider','commSlider','batHealthSlider','anomalyToggle','blockToggle','multiFaultToggle','manualSkip'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.addEventListener('input', ()=> { readMaintConditions(); updateMaintIcons(); });
+  el.addEventListener('change', ()=> { readMaintConditions(); updateMaintIcons(); });
+});
+document.getElementById('startMaint').addEventListener('click', ()=>{
+  readMaintConditions();
+  if(maint.running) { mlog('Maintenance simulation already running'); return; }
+  maint.running = true; mlog('Maintenance simulation started');
+  // charging tick
+  maint._chargeInterval = setInterval(maintChargingTick, maint.config.chargeTickIntervalSec * 1000);
+  // demo: start MC-01 runs periodically if not running
+  maint._demoRun = setInterval(()=>{ if(!maint.mc01.onRun) startMaintRun(); }, 90000);
+});
+document.getElementById('pauseMaint').addEventListener('click', ()=>{
+  if(!maint.running) { mlog('Not running'); return; }
+  maint.running = false; mlog('Maintenance simulation paused');
+  clearInterval(maint._chargeInterval); clearInterval(maint._demoRun);
+  if(maint.mc01.timer){ clearInterval(maint.mc01.timer); maint.mc01.timer = null; maint.mc01.onRun=false;}
+});
+document.getElementById('resetMaint').addEventListener('click', ()=>{
+  clearInterval(maint._chargeInterval); clearInterval(maint._demoRun);
+  if(maint.mc01.timer) clearInterval(maint.mc01.timer);
+  maint.running=false; maint.mc01 = { idx: depotIdx, onRun:false, phase:null, timer:null };
+  maint.mc02 = { idx: depotIdx, moving:false, target:null };
+  maint.battery = { mc01:100, mc02:100 };
+  maint.activeFault=null;
+  mlog('Maintenance reset to initial state');
+  renderMapRows(maintMap, maintPositions); placeMaintCars(); readMaintConditions(); updateMaintIcons();
+});
+document.getElementById('triggerFaultMaint').addEventListener('click', ()=>{
+  if(!maint.mc01.onRun){ mlog('MC-01 not running — start a run first'); return; }
+  const idx = maint.mc01.idx;
+  // default major-track manual test
+  const type = 'major-track';
+  mlog(`[Manual Fault] Forcing ${type} at ${stationsLinear[idx]}`);
+  maint.activeFault = { idx, type }; showAlert(`Major fault at ${stationsLinear[idx]} (manual)`); setTimeout(()=>maintDispatchMC02(idx,'Manual'), Math.round((100 - maint.cond.crewAvail)/100*8000));
+});
+document.getElementById('dispatchMaint').addEventListener('click', ()=> {
+  if(maint.mc01.onRun) maintDispatchMC02(maint.mc01.idx, 'Manual');
+  else mlog('MC-01 not on route');
+});
+document.getElementById('clearMaintLog').addEventListener('click', ()=> maintLog.innerHTML = '');
+document.getElementById('exportMaintLog').addEventListener('click', ()=> {
+  const blob=new Blob([maintLog.innerText], {type:'text/plain'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='maint_log.txt'; a.click(); URL.revokeObjectURL(url);
+});
+
+/* ---------------------------
+   Initial render & state sync
+   --------------------------- */
+updateMetroUI();
+renderMapRows(metroMap, metroPositions);
+renderMapRows(maintMap, maintPositions);
+placeMetroTrains();
+placeMaintCars();
+readMaintConditions();
+updateMaintIcons();
+metroLogMsg('Metro module ready — set rakes & density and press Start.');
+mlog('Maintenance module ready — configure conditions and press Start.');
+
+// ---- DARK MODE LOGIC ----
+const darkModeToggle = document.getElementById("darkModeToggle");
+const htmlEl = document.documentElement;
+
+// Apply saved theme or system preference
+if (localStorage.getItem("theme") === "dark" ||
+   (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+  htmlEl.classList.add("dark");
+  darkModeToggle.textContent = "☀️ Light";
+}
+
+// Toggle theme on button click
+darkModeToggle.addEventListener("click", () => {
+  htmlEl.classList.toggle("dark");
+  if (htmlEl.classList.contains("dark")) {
+    localStorage.setItem("theme", "dark");
+    darkModeToggle.textContent = "☀️ Light";
+  } else {
+    localStorage.setItem("theme", "light");
+    darkModeToggle.textContent = "🌙 Dark";
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KMRL Inspection Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: Inter, sans-serif; }
+    .log { font-family: monospace; font-size: 12px; }
+    .progress { height: 14px; background: #e5e7eb; border-radius: 6px; overflow: hidden; }
+    .progress-bar { height: 100%; width: 100%; transition: width 0.4s; }
+    .station { display: flex; flex-direction: column; align-items: center; min-width: 90px; }
+    .station-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; padding: 12px; border-top: 3px solid #9ca3af; }
+    .station-dot { width: 14px; height: 14px; border-radius: 50%; background: #d1d5db; margin-bottom: 6px; }
+    .active-mc01 .station-dot { background: #2563eb; }
+    .active-mc02 .station-dot { background: #dc2626; }
+    .active-mc01 { color: #2563eb; font-weight: bold; }
+    .active-mc02 { color: #dc2626; font-weight: bold; }
+    .panel { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .critical { color: red; font-weight: bold; }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen">
+
+<!-- NAV -->
+<nav class="bg-cyan-700 text-white p-4 flex justify-between items-center">
+  <h1 class="text-xl font-bold">KMRL Inspection Dashboard</h1>
+  <div class="space-x-4">
+    <button onclick="setMode('realtime')" class="bg-green-600 px-3 py-1 rounded">Real-Time</button>
+    <button onclick="setMode('demo')" class="bg-blue-600 px-3 py-1 rounded">Demo Mode</button>
+  </div>
+  <div class="space-x-6">
+    <a href="kmrc_v5_plus_inspection.html" class="hover:underline">Dashboard</a>
+    <a href="kmrc_inspectv4.html" class="hover:underline">Inspection</a>
+    <a href="kmrc_simulation.html" class="hover:underline">Simulation</a>
+    <a href="kmrc_rake_maintenance.html" class="hover:underline">Rake Maintainance</a>
+    <!-- 🌙 Dark Mode Toggle Button -->
+    <button id="darkModeToggle"
+      class="ml-4 bg-gray-200 dark:bg-gray-700 dark:text-gray-100 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+      🌙 Dark
+    </button>
+  </div>
+</nav>
+  <!-- CLOCK -->
+  <section class="panel">
+    <h2 class="heading text-lg">System Clock</h2>
+    <p class="text-sm text-gray-600">Mode: <span id="currentMode">Realtime</span></p>
+    <div id="clock" class="text-3xl font-mono font-bold mt-2">--:--</div>
+  </section>
+
+  <!-- CONTROLS -->
+  <section class="panel">
+    <h2 class="heading text-lg mb-3">Controls</h2>
+    <div class="space-x-3">
+      <button onclick="manualDispatch('MC01')" class="bg-blue-600 text-white px-3 py-2 rounded">Dispatch MC01</button>
+      <button onclick="manualDispatch('MC02')" class="bg-red-600 text-white px-3 py-2 rounded">Dispatch MC02</button>
+    </div>
+  </section>
+
+  <!-- MAINTENANCE CARS -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="panel">
+      <h3 class="heading text-lg">MC01 (Blue)</h3>
+      <p>Routine Inspector</p>
+      <div class="progress mt-2"><div class="progress-bar bg-green-500" id="MC01Battery"></div></div>
+      <p class="text-sm mt-1" id="MC01BatteryText">Battery: 100%</p>
+      <p class="mt-2 text-sm" id="MC01Position">Position: Depot</p>
+    </div>
+    <div class="panel">
+      <h3 class="heading text-lg">MC02 (Red)</h3>
+      <p>Backup Inspector</p>
+      <div class="progress mt-2"><div class="progress-bar bg-green-500" id="MC02Battery"></div></div>
+      <p class="text-sm mt-1" id="MC02BatteryText">Battery: 100%</p>
+      <p class="mt-2 text-sm" id="MC02Position">Position: Depot</p>
+    </div>
+  </section>
+
+  <!-- STATION LINE -->
+  <section class="panel">
+    <h3 class="heading mb-2">Line Diagram (Aluva → Thrippunithura)</h3>
+    <div class="station-line" id="stations"></div>
+  </section>
+
+  <!-- LOG + FAULTS -->
+  <section class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="panel">
+      <h3 class="heading">System Log</h3>
+      <div id="log" class="log bg-black text-green-100 p-3 rounded h-80 overflow-y-auto">
+        <div>[System] Initialized.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <h3 class="heading">Fault Summary</h3>
+      <table class="w-full text-xs border">
+        <thead>
+          <tr class="bg-gray-200">
+            <th class="border px-2">Time</th>
+            <th class="border px-2">Car</th>
+            <th class="border px-2">Station</th>
+            <th class="border px-2">Fault</th>
+          </tr>
+        </thead>
+        <tbody id="faultTable"></tbody>
+      </table>
+    </div>
+  </section>
+  <footer class="text-center py-4">
+        <p class="text-sm text-gray-500">© 2025 OnTrack. All Rights Reserved.</p>
+    </footer>
+</main>
+<!-- ALERT BANNER (put just after <body> or under navbar) -->
+<div id="alertBanner" 
+     class="bg-red-600 text-white font-bold py-2 px-4 hidden items-center justify-between">
+  <span>⚠️ Fault Detected! <span id="alertText"></span></span>
+  <button onclick="dismissAlert()" 
+          class="ml-4 bg-white text-red-600 px-3 rounded hover:bg-gray-200">✖</button>
+</div>
+<!-- Buzzer (hidden audio, auto loop) -->
+<audio id="buzzer" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" loop></audio>
+<script>
+let mode="realtime", timer;
+let demoHour=5, demoMin=0;
+let battery={MC01:100,MC02:100};
+let activeIntervals={};
+const stations=["Aluva","Pulinchodu","Companypady","Ambattukavu","Muttom","Kalamassery","CUSAT","Pathadipalam","Edappally","Changampuzha Park","Palarivattom","JLN Stadium","Kaloor","Town Hall","MG Road","Maharaja’s","Ernakulam South","Kadavanthra","Elamkulam","Vyttila","Thaikoodam","Petta","Vadakkekotta","S.N. Junction","Thrippunithura"];
+const mandatoryRuns=["05:30","13:00","17:30"];
+const depot="Muttom";
+
+function renderStations(){
+  const div=document.getElementById("stations");
+  div.innerHTML="";
+  stations.forEach(s=>{
+    div.innerHTML+=`<div class="station" id="station-${s.replace(/\s/g,'')}"><div class="station-dot"></div><span>${s}</span></div>`;
+  });
+}
+
+function log(msg){
+  const clock=document.getElementById("clock").innerText;
+  document.getElementById("log").innerHTML=`<div>[${clock}] ${msg}</div>`+document.getElementById("log").innerHTML;
+}
+
+function addFault(car,station,fault){
+  const clock=document.getElementById("clock").innerText;
+  document.getElementById("faultTable").innerHTML=
+    `<tr><td class="border px-2">${clock}</td><td class="border px-2">${car}</td><td class="border px-2">${station}</td><td class="border px-2 critical">${fault}</td></tr>`+
+    document.getElementById("faultTable").innerHTML;
+
+  // --- Show banner ---
+  const banner = document.getElementById("alertBanner");
+  banner.classList.remove("hidden");
+  banner.classList.add("flex");
+  document.getElementById("alertText").innerText=`${fault} at ${station}`;
+
+  // --- Play buzzer ---
+  const buzzer=document.getElementById("buzzer");
+  buzzer.currentTime=0;
+  buzzer.play();
+}
+
+function dismissAlert(){
+  const banner=document.getElementById("alertBanner");
+  banner.classList.add("hidden");
+  banner.classList.remove("flex");
+
+  const buzzer=document.getElementById("buzzer");
+  buzzer.pause();
+  buzzer.currentTime=0;
+}
+function updateClockReal(){
+  const now=new Date();
+  const hh=String(now.getHours()).padStart(2,"0"), mm=String(now.getMinutes()).padStart(2,"0");
+  document.getElementById("clock").innerText=`${hh}:${mm}`;
+  checkMandatoryRuns(`${hh}:${mm}`);
+}
+
+function updateClockDemo(){
+  const hh=String(demoHour).padStart(2,"0"), mm=String(demoMin).padStart(2,"0");
+  document.getElementById("clock").innerText=`${hh}:${mm}`;
+  checkMandatoryRuns(`${hh}:${mm}`);
+  demoMin++; if(demoMin>=60){ demoMin=0; demoHour++; if(demoHour>=24) demoHour=0; }
+}
+
+function setMode(newMode){
+  clearInterval(timer);
+  mode=newMode;
+  document.getElementById("currentMode").innerText=newMode;
+  if(newMode==="realtime"){ updateClockReal(); timer=setInterval(updateClockReal,60000); }
+  else { demoHour=5; demoMin=0; updateClockDemo(); timer=setInterval(updateClockDemo,1000); }
+}
+
+function manualDispatch(car){
+  if(typeof activeIntervals === "undefined"){ 
+    activeIntervals = {}; 
+  }
+  if(activeIntervals[car]) return;
+
+  log(`🚆 Manual Dispatch: ${car}`);
+  startInspection(car, true);
+}
+
+function checkMandatoryRuns(time){
+  if(mandatoryRuns.includes(time)){
+    const car=(Math.random()<0.5)?"MC01":"MC02";
+    log(`🕑 Mandatory run → ${car}`);
+    startInspection(car,true);
+  }
+}
+
+function startInspection(car,withStaff){
+  let idx=0;
+  const interval = setInterval(()=>{
+    const st = stations[idx];
+    highlightStation(st, car);
+    document.getElementById(car.toLowerCase()+"Position").innerText = `Position: ${st}`;
+    log(`📍 ${car} at ${st}`);
+
+    // Battery drain + charge logic
+    let discharge = withStaff ? 0.4 : 0.2;
+    battery[car] = Math.max(0, battery[car] - discharge);
+    if(isSolarActive() && !atDepot(st)){
+        battery[car] = Math.min(100, battery[car] + 0.2); // solar charge
+    }
+    updateBatteryDisplay();
+
+    // Fault simulation
+    if(Math.random() < 0.05){   // rare 5% chance
+        const fault = Math.random() < 0.5 ? "Track Fault" : "OHE Fault";
+        triggerFault(car, st, fault);
+    }
+
+    idx++;
+    if(idx >= stations.length){ 
+        clearInterval(interval);
+        activeIntervals[car] = null;
+        log(`✅ ${car} returned to Depot`);
+        document.getElementById(car.toLowerCase()+"Position").innerText = "Position: Depot";
+    }
+}, mode==="demo" ? 2000 : 60000);   // demo = fast, realtime = 1min
+  log(`${car} started inspection`);
+  activeIntervals[car]=setInterval(()=>{
+    const st=stations[idx];
+    highlightStation(st,car);
+    document.getElementById(car+"Position").innerText=`Position: ${st}`;
+    log(`📍 ${car} at ${st}`);
+    
+    // Battery drain + solar assist
+    let drain=0.4;
+    let gain=solarActive()?0.2:0;
+    battery[car]=Math.max(0, battery[car]-drain+gain);
+    updateBattery(car);
+
+    // Rare faults
+    if(Math.random()<0.05){
+      const fault=Math.random()<0.5?"Track Fault":"OHE Fault";
+      log(`⚠️ ${car} fault at ${st}: ${fault}`);
+      addFault(car,st,fault);
+      if(Math.random()<0.7) log(`${car} fixed fault ✅`);
+      else { log(`🚨 Major fault → sending backup`); startInspection(car==="MC01"?"MC02":"MC01",true); }
+    }
+
+    idx++;
+    if(idx>=stations.length){
+      clearInterval(activeIntervals[car]);
+      returnToDepot(car);
+    }
+  }, mode==="demo"?1000:60000);
+}
+
+function returnToDepot(car){
+  let idx=stations.indexOf("Thrippunithura");
+  activeIntervals[car]=setInterval(()=>{
+    idx--;
+    const st=stations[idx];
+    highlightStation(st,car);
+    document.getElementById(car+"Position").innerText=`Returning via ${st}`;
+    
+    // Battery drain + solar assist
+    let drain=0.4;
+    let gain=solarActive()?0.2:0;
+    battery[car]=Math.max(0, battery[car]-drain+gain);
+    updateBattery(car);
+
+    if(st===depot){
+      clearInterval(activeIntervals[car]);
+      log(`✅ ${car} returned to Depot`);
+      document.getElementById(car+"Position").innerText="Position: Depot";
+      depotCharge(car);
+    }
+  }, mode==="demo"?1000:60000);
+}
+
+function depotCharge(car){
+  // fast charge every tick at depot
+  let chargeInterval=setInterval(()=>{
+    if(document.getElementById(car+"Position").innerText.includes("Depot")){
+      battery[car]=Math.min(100, battery[car]+2);
+      updateBattery(car);
+      if(battery[car]>=100) clearInterval(chargeInterval);
+    } else clearInterval(chargeInterval);
+  }, mode==="demo"?1000:60000);
+}
+function highlightStation(st,car){
+  document.querySelectorAll(".station").forEach(el=>el.classList.remove("active-mc01","active-mc02"));
+  const el=document.getElementById("station-"+st.replace(/\s/g,''));
+  if(el) el.classList.add(car==="MC01"?"active-mc01":"active-mc02");
+}
+
+function updateBattery(car){
+  let val = battery[car];
+  let color = "bg-green-500"; 
+  if(val <= 50 && val > 20) color = "bg-yellow-500"; 
+  if(val <= 20) color = "bg-red-600";
+
+  document.getElementById(car+"Battery").style.width = val + "%";
+  document.getElementById(car+"Battery").className = `progress-bar ${color}`;
+  document.getElementById(car+"BatteryText").innerText = `Battery: ${val.toFixed(1)}%`;  // 👈 FIXED
+}
+function solarActive(){
+  let hour=(mode==="realtime"?new Date().getHours():demoHour);
+  return (hour>=6 && hour<=18);
+}
+window.onload=()=>{
+  renderStations();
+  setMode("realtime");
+};
+// ---- DARK MODE LOGIC ----
+const darkModeToggle = document.getElementById("darkModeToggle");
+const htmlEl = document.documentElement;
+
+// Apply saved theme or system preference
+if (localStorage.getItem("theme") === "dark" ||
+   (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+  htmlEl.classList.add("dark");
+  darkModeToggle.textContent = "☀️ Light";
+}
+
+// Toggle theme on button click
+darkModeToggle.addEventListener("click", () => {
+  htmlEl.classList.toggle("dark");
+  if (htmlEl.classList.contains("dark")) {
+    localStorage.setItem("theme", "dark");
+    darkModeToggle.textContent = "☀️ Light";
+  } else {
+    localStorage.setItem("theme", "light");
+    darkModeToggle.textContent = "🌙 Dark";
+  }
+});
+
+</script>
+</body>
+</html>

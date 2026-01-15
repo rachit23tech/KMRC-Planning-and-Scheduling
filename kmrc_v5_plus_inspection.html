@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMRL Smart Induction Dashboard</title>
+    <!-- Tailwind CSS for rapid, modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Font for a professional feel -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Leaflet CSS & JS -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+  crossorigin=""
+/>
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+
+    <style>
+      /* 🌙 Common CSS for All Headings (Light + Dark Mode) */
+h1, h2, h3, h4 {
+  color: #1f2937; /* Tailwind's gray-800 for light mode */
+  font-weight: 600;
+  transition: color 0.3s ease;
+}
+
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4 {
+  color: #f9fafb; /* Tailwind's gray-50 for dark mode */
+}
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .reason-dot {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+        .file-input-button {
+            border: 2px solid #3B82F6;
+            color: #3B82F6;
+            background-color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-input-wrapper:hover .file-input-button {
+            background-color: #EFF6FF;
+        }
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            background-color: #2c3e50;
+            color: white;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+            transform: translate(-50%, 10px);
+        }
+        #toast.show {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        /* Modal styles */
+        .modal-overlay {
+            transition: opacity 0.3s ease;
+        }
+        .modal-container {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .blinking {
+            animation: blinker 1.5s linear infinite;
+        }
+        @keyframes blinker {
+            50% {
+                opacity: 0.3;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-white flex flex-col min-h-screen">
+
+<nav class="bg-cyan-700 dark:bg-gray-800 text-white px-6 py-3 flex justify-between items-center shadow-lg">
+  <h1 class="text-xl font-bold text-white">KMRL Smart System-Dashboard</h1>
+  <div class="space-x-6 flex items-center">
+    <a href="kmrc_v5_plus_inspection.html" class="hover:underline">Dashboard</a>
+    <a href="kmrc_inspectv4.html" class="hover:underline">Inspection</a>
+    <a href="kmrc_simulation.html" class="hover:underline">Simulation</a>
+    <a href="kmrc_rake_maintenance.html" class="hover:underline">Rake Maintainance</a>
+
+    <!-- 🌙 Dark Mode Toggle Button -->
+    <button id="darkModeToggle"
+      class="ml-4 bg-gray-200 dark:bg-gray-700 dark:text-gray-100 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+      🌙 Dark
+    </button>
+  </div>
+</nav>
+
+    <div class="container mx-auto p-4 md:p-8 flex-grow">
+        <!-- Header Section -->
+        <header class="mb-8 text-center relative">
+            <h1 class="text-4xl font-bold text-blue-700">Smart Train Induction & Readiness Dashboard</h1>
+            <p class="text-lg text-gray-600 mt-2">AI-Powered Daily Roster & Timetable Generation for Kochi Metro</p>
+            <p class="text-md text-gray-500 mt-1">by <span class="font-bold">Team OnTrack</span></p>
+            <div class="absolute top-0 right-0">
+                 <div class="relative" id="languageSwitcher">
+                    <button id="languageDropdownBtn" class="flex items-center space-x-2 font-semibold text-gray-600 bg-gray-200 px-3 py-1 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM4.332 8.027a6.002 6.002 0 0110.421 2.395.75.75 0 001.3-.395A7.5 7.5 0 003.11 8.422a.75.75 0 001.222-.395zM4.35 11.22a.75.75 0 000 1.5h1.22a.75.75 0 000-1.5H4.35zm3.42.75a.75.75 0 00-1.5 0v2.5a.75.75 0 001.5 0v-2.5z" clip-rule="evenodd" /></svg>
+                        <span id="currentLangDisplay">EN</span>
+                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    <div id="languageDropdownMenu" class="absolute right-0 mt-2 w-28 bg-white rounded-md shadow-lg z-10 hidden">
+                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 lang-option" data-lang="en">English</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 lang-option" data-lang="ml">മലയാളം</a>
+                        <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 lang-option" data-lang="hi">हिन्दी</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="bg-white rounded-2xl shadow-2xl p-6 md:p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg-col-span-1 bg-gray-50 rounded-xl p-6 border border-gray-200 flex flex-col">
+                <h2 class="text-2xl color:black font-semibold mb-6 border-b pb-3">Operational Controls</h2>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">1. Upload Daily Data Files</label>
+                        <div class="flex items-center space-x-2">
+                           <div class="file-input-wrapper">
+                                <button class="file-input-button">📂 Choose Files</button>
+                                <input type="file" id="fileUploader" multiple>
+                           </div>
+                           <p id="fileName" class="text-sm text-gray-500 truncate">No files selected.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-200 rounded-lg p-2 h-24 overflow-y-auto text-xs font-mono text-gray-600 border" id="filePreview">
+                        Uploaded file list will appear here...
+                    </div>
+
+                    <div>
+                        <label for="whatIf" class="block text-sm font-medium text-black-700 mb-2">2. Simulate Scenario</label>
+                        <select id="whatIf" class="w-full bg-white border border-gray-300 text-black rounded-lg shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="none">Standard Day (No Faults)</option>
+                            <option value="random_day">Simulate a Random Day</option>
+                             <optgroup label="High Demand Events">
+                                <option value="onam_rush">Onam Festival Rush</option>
+                                <option value="new_year_eve">New Year's Eve Rush</option>
+                            </optgroup>
+                            <optgroup label="New Train Trials">
+                                <option value="new_train_126">Test New Rake #126</option>
+                                <option value="new_train_127">Test New Rake #127</option>
+                                <option value="new_train_128">Test New Rake #128</option>
+                            </optgroup>
+                            <optgroup label="Single Train Issues">
+                                <option value="fail_fitness">Train #108 Fails Fitness Check</option>
+                                <option value="urgent_maintenance">Train #115 Needs Urgent Maintenance</option>
+                                <option value="ad_priority">Prioritize Ad Campaign on #114</option>
+                            </optgroup>
+                            <optgroup label="Fleet & Depot Issues">
+                                <option value="cleaning_delay">Cleaning Delayed for 'C' Block</option>
+                                <option value="depot_blockage">Depot Block 'A' is Inaccessible</option>
+                                <option value="component_shortage">Component Shortage (Grounds >9000km)</option>
+                                <option value="sw_update_fail">'D' Block Offline for Software Update</option>
+                            </optgroup>
+                             <optgroup label="Operational Mandates">
+                                <option value="vvip_movement">VVIP Movement (Prioritize #111)</option>
+                                <option value="extreme_weather">Extreme Weather (Reject >8000km)</option>
+                                <option value="priority_cleaning">Hygiene Mandate (Reject all 'Due')</option>
+                                <option value="reduced_fleet">Cost-Saving (Use 15 trains only)</option>
+                                <option value="multi_failure">Multiple Critical Failures</option>
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <button id="generateBtn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition-transform transform hover:scale-105 shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none" disabled>
+                        📊 Generate Today's Roster
+                    </button>
+                </div>
+                
+                <div class="mt-8 flex-grow flex flex-col">
+                    <h3 class="text-lg font-semibold mb-2">AI Decision Log</h3>
+                    <div class="bg-gray-900 text-white font-mono text-sm rounded-lg p-4 h-48 overflow-y-auto" id="aiLog">
+                        <p class="text-gray-400">System Initialized...</p>
+                    </div>
+                </div>
+                <!-- Real-Time Metro Ops Panel -->
+                <div id="realTimePanel" class="bg-cyan text-black rounded-lg shadow p-4 mt-4">
+                    <h3 class="text-lg font-semibold mb-2">Real-Time Metro Ops Info</h3>
+                    <div class="flex flex-col space-y-1 text-black-700 text-sm">
+                    <div id="rt-date">Date: --</div>
+                    <div id="rt-day">Day: --</div>
+                    <div id="rt-time" class="font-mono text-lg">Time: --:--:--</div>
+                    <div id="rt-weather">Weather: --</div>
+                    <div id="rt-temp">Temperature: -- °C</div>
+                    <div id="rt-feelslike">Feels Like: -- °C</div>
+                    <div id="rt-humidity">Humidity: --%</div>
+                    <div id="rt-wind">Wind: -- km/h</div>
+                    <div id="rt-sun">Sunrise: -- | Sunset: --</div>
+                    </div>
+                </div>
+                   <div class="bg-gray-900 text-white font-mono text-sm rounded-lg p-4 h-48 overflow-y-auto" id="aiLog">
+                        <p class="text-gray-400">System Initialized...</p>
+                </div>
+                <div class="mt-8 flex-grow flex flex-col">
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="text-lg font-semibold">Live Train Movement Tracker</h3>
+                        <button id="toggleTrackerBtn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-3 rounded-md transition disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Start</button>
+                    </div>
+                    <div class="text-center font-semibold text-xl my-2" id="simulatedTime">06:00:00</div>
+                    <div class="bg-gray-900 text-white font-mono text-sm rounded-lg p-4 h-48 overflow-y-auto" id="liveTrackerLog">
+                        <p class="text-gray-400">Tracker paused. Generate a timetable to begin.</p>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel: The Results Dashboard -->
+            <div class="lg:col-span-2">
+                 <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <div class="flex items-center space-x-4">
+                        <h2 class="text-2xl font-semibold">Today's Recommended Roster</h2>
+                        <button id="shareRosterBtn" class="bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-lg hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" disabled>Share</button>
+                        <button id="downloadRosterBtn" class="bg-green-100 text-green-700 font-semibold py-1 px-3 rounded-lg hover:bg-green-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" disabled>Download Excel</button>
+                    </div>
+                     <div class="text-right">
+                        <p class="text-sm font-medium text-gray-500">Data Source</p>
+                        <p id="data_source_display" class="font-semibold text-blue-600">No Data Loaded</p>
+                     </div>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div class="bg-blue-100 text-blue-800 p-3 rounded-lg shadow text-center"> <p class="text-xs font-medium">Trains Required</p> <p class="text-2xl font-bold" id="trains_required">--</p> </div>
+                    <div class="bg-green-100 text-green-800 p-3 rounded-lg shadow text-center"> <p class="text-sm font-medium">Ready for Service</p> <p class="text-2xl font-bold" id="trains_ready">--</p> </div>
+                    <div class="bg-yellow-100 text-yellow-800 p-3 rounded-lg shadow text-center"> <p class="text-sm font-medium">On Standby</p> <p class="text-2xl font-bold" id="trains_standby">--</p> </div>
+                    <div class="bg-red-100 text-red-800 p-3 rounded-lg shadow text-center"> <p class="text-sm font-medium">Rejected</p> <p class="text-2xl font-bold" id="trains_rejected">--</p> </div>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-inner border h-80 overflow-y-auto mb-6">
+                    <table class="w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Rank</th> <th scope="col" class="px-6 py-3">Train ID</th> <th scope="col" class="px-6 py-3">Readiness Score</th> <th scope="col" class="px-6 py-3">Status</th> <th scope="col" class="px-6 py-3">Key Reasons</th>
+                            </tr>
+                        </thead>
+                        <tbody id="roster_table_body">
+                           <tr class="text-center"><td colspan="5" class="p-8 text-gray-500">Awaiting data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="border-t pt-4 mb-6">
+                    <h2 class="text-2xl font-semibold mb-4">Live Depot Status</h2>
+                    <div id="depot_view_container" class="bg-gray-100 p-4 rounded-lg grid grid-cols-4 gap-4">
+                        <!-- Depot blocks will be populated by JS -->
+                    </div>
+                </div>
+
+                 <div class="border-t pt-4 mb-6">
+                    <h2 class="text-2xl font-semibold mb-4">Passenger Density by Station</h2>
+                    <div id="density_graph_container" class="bg-gray-100 p-4 rounded-lg h-48 flex items-end justify-around">
+                        <div class="text-center text-gray-500 self-center">Generate a roster to view density.</div>
+                    </div>
+                </div>
+                <section class="border-t pt-4 mb-6">
+                    <h2 class="text-2xl font-semibold mb-4">Kochi Metro Route Map</h2>
+                    <div id="kochiMetroMap" class="rounded-xl overflow-hidden border" style="height: 450px;"></div>
+                </section>
+                <div class="border-t pt-4">
+                     <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-2xl font-semibold">Generated Operational Timetable</h2>
+                        <div class="flex items-center space-x-4">
+                             <button id="generateTimetableBtn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-300 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>Generate</button>
+                             <button id="shareTimetableBtn" class="bg-gray-200 text-gray-700 font-semibold py-1 px-3 rounded-lg hover:bg-gray-300 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" disabled>Share</button>
+                             <button id="downloadTimetableBtn" class="bg-green-100 text-green-700 font-semibold py-1 px-3 rounded-lg hover:bg-green-200 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed" disabled>Download Excel</button>
+                        </div>
+                    </div>
+                    <div id="timetableDisplay" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-black bg-gray-100 p-4 rounded-lg h-64 overflow-y-auto">
+                        <div id="timetable-up">
+                            <h3 id="timetable-up-header" class="font-bold text-center mb-2 sticky top-0 bg-gray-100 py-1">UP (TPHT → ALVA)</h3>
+                            <div id="timetable-up-content" class="space-y-1">
+                                <div class="text-center text-gray-500">Generate a roster first.</div>
+                            </div>
+                        </div>
+                        <div id="timetable-down">
+                            <h3 id="timetable-down-header" class="font-bold text-center mb-2 sticky top-0 bg-gray-100 py-1">DOWN (ALVA → TPHT)</h3>
+                             <div id="timetable-down-content" class="space-y-1">
+                                <div class="text-center text-gray-500">Generate a roster first.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="text-center py-4">
+        <p class="text-sm text-gray-500">© 2025 OnTrack. All Rights Reserved.</p>
+    </footer>
+
+    <div id="toast">Copied to clipboard!</div>
+
+    <!-- Train Details Modal -->
+    <div id="trainDetailModal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div id="modal-overlay" class="absolute inset-0 bg-black bg-opacity-50"></div>
+        <div id="modal-container" class="bg-white rounded-lg shadow-xl w-11/12 md:max-w-2xl mx-auto z-50 transform scale-95 opacity-0">
+            <div class="p-6">
+                <div class="flex justify-between items-start">
+                    <h3 class="text-2xl font-bold text-gray-800" id="modal-title">Train #101 Details</h3>
+                    <button id="closeModalBtn" class="text-gray-400 hover:text-gray-700 text-3xl font-bold">&times;</button>
+                </div>
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h4 class="font-semibold text-lg mb-2">Readiness Breakdown</h4>
+                        <ul class="space-y-2 text-sm" id="modal-details"></ul>
+                        <div class="mt-4">
+                            <p class="text-sm font-medium text-gray-500">Depot Location</p>
+                            <p class="text-lg font-semibold" id="modal-location">A-01</p>
+                        </div>
+                         <div class="mt-4" id="whatsapp-share-container">
+                            <!-- WhatsApp button will be added here if needed -->
+                         </div>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-lg mb-2">Simulated Live Location</h4>
+                         <div class="bg-gray-200 rounded-lg h-48 flex items-center justify-center">
+                            <img src="https://placehold.co/400x200/e2e8f0/64748b?text=Simulated+Depot+Map" alt="Simulated Map" class="rounded-md object-cover">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let loadedFiles = {};
+let scoredFleetForTimetable = [];
+let timetableData = { up: [], down: [] };
+let demandForTimetable = 'Normal';
+let stopData = {};
+let currentLang = 'en';
+let masterSchedule = [];
+let tripToTrainMap = {};
+let liveTrackerInterval = null;
+let simulatedClock = 6 * 3600; // Start at 6:00:00 in seconds
+const rakeNameMap = {
+  101: "KRISHNA",
+  102: "TAPTI",
+  103: "NILA",
+  104: "SARAYU",
+  105: "ARUTH",
+  106: "VAIGAI",
+  107: "JHANAVI",
+  108: "DHWANIL",
+  109: "BHAVANI",
+  110: "PADMA",
+  111: "MANDAKINI",
+  112: "YAMUNA",
+  113: "PERIYAR",
+  114: "KABANI",
+  115: "VAAYU",
+  116: "KAVERI",
+  117: "SHIRIYA",
+  118: "PAMPA",
+  119: "NARMADA",
+  120: "MAHE",
+  121: "MAARUT",
+  122: "SABARMATHI",
+  123: "GODHAVARI",
+  124: "GANGA",
+  125: "PAVAN"
+};
+const pristineTrainFleet = [
+    { id: 101, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 4500, cleaning: 'Clean', location: 'A-01' }, { id: 102, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 8200, cleaning: 'Clean', location: 'A-02' }, { id: 103, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 9900, cleaning: 'Clean', location: 'A-03' }, { id: 104, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 1200, cleaning: 'Clean', location: 'A-04' }, { id: 105, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 6100, cleaning: 'Clean', location: 'A-05' }, 
+    { id: 106, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 3300, cleaning: 'Clean', location: 'B-01' }, { id: 107, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 500, cleaning: 'Clean', location: 'B-02' }, { id: 108, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 7500, cleaning: 'Clean', location: 'B-03' }, { id: 109, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 2100, cleaning: 'Clean', location: 'B-04' }, { id: 110, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 9500, cleaning: 'Clean', location: 'B-05' }, 
+    { id: 111, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 100, cleaning: 'Clean', location: 'C-01' }, { id: 112, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 5600, cleaning: 'Clean', location: 'C-02' }, { id: 113, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 4200, cleaning: 'Clean', location: 'C-03' }, { id: 114, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 7100, cleaning: 'Clean', location: 'C-04' }, { id: 115, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 9800, cleaning: 'Clean', location: 'C-05' }, 
+    { id: 116, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 10000, cleaning: 'Clean', location: 'D-01' }, { id: 117, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 2500, cleaning: 'Clean', location: 'D-02' }, { id: 118, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 8800, cleaning: 'Clean', location: 'D-03' }, { id: 119, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 6300, cleaning: 'Clean', location: 'D-04' }, { id: 120, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 300, cleaning: 'Clean', location: 'D-05' }, 
+    { id: 121, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 1500, cleaning: 'Clean', location: 'E-01' }, { id: 122, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 4900, cleaning: 'Clean', location: 'E-02' }, { id: 123, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 7800, cleaning: 'Clean', location: 'E-03' }, { id: 124, fitness: 'OK', maintenanceDue: false, adCampaign: 'Active', mileage: 5100, cleaning: 'Clean', location: 'E-04' }, { id: 125, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'E-05' }
+];
+
+const newRakesFleet = [
+    { id: 126, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'F-01' }, { id: 127, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'F-02' }, { id: 128, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'F-03' }, { id: 129, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'F-04' }, { id: 130, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'F-05' },
+    { id: 131, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'G-01' }, { id: 132, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'G-02' }, { id: 133, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'G-03' }, { id: 134, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'G-04' }, { id: 135, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'G-05' },
+    { id: 136, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'H-01' }, { id: 137, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'H-02' }, { id: 138, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'H-03' }, { id: 139, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'H-04' }, { id: 140, fitness: 'OK', maintenanceDue: false, adCampaign: null, mileage: 0, cleaning: 'Clean', location: 'H-05' }
+];
+
+const dom = {
+    fileUploader: document.getElementById('fileUploader'), fileName: document.getElementById('fileName'), filePreview: document.getElementById('filePreview'), generateBtn: document.getElementById('generateBtn'), whatIfSelect: document.getElementById('whatIf'), dataSourceDisplay: document.getElementById('data_source_display'), aiLog: document.getElementById('aiLog'), rosterTableBody: document.getElementById('roster_table_body'), trainsRequiredEl: document.getElementById('trains_required'), trainsReadyEl: document.getElementById('trains_ready'), trainsStandbyEl: document.getElementById('trains_standby'), trainsRejectedEl: document.getElementById('trains_rejected'), generateTimetableBtn: document.getElementById('generateTimetableBtn'), shareRosterBtn: document.getElementById('shareRosterBtn'), shareTimetableBtn: document.getElementById('shareTimetableBtn'), downloadRosterBtn: document.getElementById('downloadRosterBtn'), downloadTimetableBtn: document.getElementById('downloadTimetableBtn'), timetableUpContent: document.querySelector('#timetable-up-content'), timetableDownContent: document.querySelector('#timetable-down-content'), toast: document.getElementById('toast'), trainDetailModal: document.getElementById('trainDetailModal'), modalOverlay: document.getElementById('modal-overlay'), closeModalBtn: document.getElementById('closeModalBtn'), languageSwitcher: document.getElementById('languageSwitcher'), languageDropdownBtn: document.getElementById('languageDropdownBtn'), languageDropdownMenu: document.getElementById('languageDropdownMenu'), currentLangDisplay: document.getElementById('currentLangDisplay'), depotView: document.getElementById('depot_view_container'), densityGraph: document.getElementById('density_graph_container'), toggleTrackerBtn: document.getElementById('toggleTrackerBtn'), simulatedTime: document.getElementById('simulatedTime'), liveTrackerLog: document.getElementById('liveTrackerLog')
+};
+
+function parseCSV(content) {
+    if (!content) return [];
+    const lines = content.trim().split('\n');
+    const header = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).map(line => {
+        const values = line.split(',');
+        return header.reduce((obj, h, i) => {
+            obj[h] = values[i] ? values[i].trim() : '';
+            return obj;
+        }, {});
+    });
+}
+
+function processUploadedFiles() {
+    stopData = {}; // Reset data
+    if (loadedFiles['stops.txt']) {
+        const stops = parseCSV(loadedFiles['stops.txt']);
+        stops.forEach(s => { stopData[s.stop_id] = { en: s.stop_name }; });
+        log("Processed stops.txt.");
+    } else {
+        log("Warning: stops.txt not found. Using default station IDs.");
+    }
+
+    if (loadedFiles['translations.txt'] && Object.keys(stopData).length > 0) {
+        const translations = parseCSV(loadedFiles['translations.txt']);
+        translations.forEach(t => {
+            if (stopData[t.record_id]) { stopData[t.record_id][t.language] = t.translation; }
+        });
+        dom.languageDropdownBtn.disabled = false;
+        log("Processed translations.txt. Language switcher enabled.");
+    } else {
+        dom.languageDropdownBtn.disabled = true;
+        log("Warning: translations.txt not found. Language switcher disabled.");
+    }
+    updateTimetableHeaders();
+}
+
+
+function updateTimetableHeaders() {
+    const upHeader = document.getElementById('timetable-up-header');
+    const downHeader = document.getElementById('timetable-down-header');
+    const tphtName = stopData['TPHT'] ? (stopData['TPHT'][currentLang] || stopData['TPHT']['en']) : 'TPHT';
+    const alvaName = stopData['ALVA'] ? (stopData['ALVA'][currentLang] || stopData['ALVA']['en']) : 'ALVA';
+    upHeader.textContent = `UP (${tphtName} → ${alvaName})`;
+    downHeader.textContent = `DOWN (${alvaName} → ${tphtName})`;
+}
+
+function openModal(train) {
+    document.getElementById('modal-title').textContent = `Train #${train.id} – ${rakeNameMap[train.id] || "Unknown"} Details`;
+    document.getElementById('modal-details').innerHTML = `<li><strong>Fitness:</strong> <span class="${train.fitness === 'OK' ? 'text-green-600' : 'text-red-600'}">${train.fitness}</span></li><li><strong>Maintenance:</strong> <span class="${train.maintenanceDue ? 'text-yellow-600' : 'text-green-600'}">${train.maintenanceDue ? 'Due' : 'Not Due'}</span></li><li><strong>Cleaning:</strong> <span class="${train.cleaning === 'Clean' ? 'text-green-600' : 'text-yellow-600'}">${train.cleaning}</span></li><li><strong>Ad Campaign:</strong> ${train.adCampaign || 'None'}</li><li><strong>Mileage:</strong> ${train.mileage.toLocaleString()} km</li>`;
+    document.getElementById('modal-location').textContent = train.location;
+    
+    const whatsappContainer = document.getElementById('whatsapp-share-container');
+    if (train.status === 'Rejected') {
+        const reason = train.reasons.find(r => r.color.includes('red') || r.color.includes('yellow'))?.text || 'Low Score';
+        const message = `*KMRL Alert* - Train #${train.id} requires attention. Reason: ${reason}. Location: ${train.location}. Please investigate.`;
+        whatsappContainer.innerHTML = `<a href="https://api.whatsapp.com/send?text=${encodeURIComponent(message)}" target="_blank" class="inline-block mt-4 bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 transition">Share Alert via WhatsApp</a>`;
+    } else {
+        whatsappContainer.innerHTML = '';
+    }
+
+    dom.trainDetailModal.classList.remove('hidden');
+    setTimeout(() => {
+        dom.trainDetailModal.querySelector('#modal-container').classList.remove('scale-95', 'opacity-0');
+        dom.trainDetailModal.querySelector('#modal-overlay').classList.remove('opacity-0');
+    }, 10);
+}
+
+function closeModal() {
+    dom.trainDetailModal.querySelector('#modal-container').classList.add('scale-95', 'opacity-0');
+    dom.trainDetailModal.querySelector('#modal-overlay').classList.add('opacity-0');
+    setTimeout(() => dom.trainDetailModal.classList.add('hidden'), 300);
+}
+
+function calculateReadiness(train) {
+    let score = 0;
+    let reasons = [];
+    if (train.fitness === 'OK') { score += 50; reasons.push({ text: 'Fitness OK', color: 'bg-green-500' }); } else { train.score = 0; train.reasons = [{ text: 'FITNESS FAIL', color: 'bg-red-500' }]; return train; }
+    if (!train.maintenanceDue) { score += 20; reasons.push({ text: 'No Maintenance Due', color: 'bg-green-500' }); } else { score -= 30; reasons.push({ text: 'Maintenance Due', color: 'bg-yellow-500' }); }
+    const mileageScore = Math.max(0, Math.round((10000 - train.mileage) / 1000) * 1.5);
+    score += mileageScore;
+    if (mileageScore > 10) reasons.push({ text: 'Low Mileage', color: 'bg-green-500'});
+    if (train.cleaning === 'Clean') { score += 10; reasons.push({ text: 'Clean', color: 'bg-green-500' }); } else { score -= 5; reasons.push({ text: 'Cleaning Due', color: 'bg-yellow-500' }); }
+    if (train.adCampaign === 'PRIORITY') { score += 50; reasons.unshift({ text: 'PRIORITY Ad Campaign', color: 'bg-purple-500' }); } 
+    else if (train.adCampaign === 'Active') { score += 10; reasons.push({ text: 'Ad Campaign Active', color: 'bg-blue-500' }); }
+    train.score = Math.round(score);
+    train.reasons = reasons;
+    return train;
+}
+
+function log(message) {
+    const timestamp = new Date().toLocaleTimeString();
+    dom.aiLog.innerHTML += `<p class="text-gray-300"><span class="text-blue-400">[${timestamp}]</span> ${message}</p>`;
+    dom.aiLog.scrollTop = dom.aiLog.scrollHeight;
+}
+
+function simulateDailyFleetState() {
+    log("Simulating a new day with random faults...");
+    let faultCount = { fitness: 0, maintenance: 0, cleaning: 0 };
+    const simulatedFleet = JSON.parse(JSON.stringify(pristineTrainFleet));
+
+    simulatedFleet.forEach(train => {
+        train.mileage += Math.floor(Math.random() * 200) + 50;
+        if (train.mileage > 10000) train.maintenanceDue = true;
+        if (Math.random() < 0.1) { train.fitness = 'FAIL'; faultCount.fitness++; }
+        if (Math.random() < 0.15) { train.maintenanceDue = true; faultCount.maintenance++; }
+        if (Math.random() < 0.25) { train.cleaning = 'Due'; faultCount.cleaning++; }
+    });
+    log(`Simulation complete: ${faultCount.fitness} fitness fails, ${faultCount.maintenance} maintenance alerts, ${faultCount.cleaning} cleaning alerts.`);
+    return simulatedFleet;
+}
+
+function generateRoster() {
+    if (Object.keys(loadedFiles).length === 0) { log("ERROR: No data files loaded."); return; }
+    dom.aiLog.innerHTML = '';
+    log("Processing instruction received...");
+    
+    let trainFleet;
+    const scenario = dom.whatIfSelect.value;
+    
+    if (scenario === 'random_day') {
+        trainFleet = simulateDailyFleetState();
+    } else {
+        trainFleet = JSON.parse(JSON.stringify(pristineTrainFleet));
+        log(`Applying scenario: ${dom.whatIfSelect.options[dom.whatIfSelect.selectedIndex].text}`);
+        switch(scenario) {
+            case 'fail_fitness': { const train = trainFleet.find(t => t.id === 108); if(train) train.fitness = 'FAIL'; break; }
+            case 'urgent_maintenance': { const train = trainFleet.find(t => t.id === 115); if(train) train.maintenanceDue = true; break; }
+            case 'ad_priority': { const train = trainFleet.find(t => t.id === 114); if(train) train.adCampaign = 'PRIORITY'; break; }
+            case 'cleaning_delay': trainFleet.forEach(t => { if (t.location.startsWith('C-')) t.cleaning = 'Due'; }); break;
+            case 'depot_blockage': trainFleet.forEach(t => { if (t.location.startsWith('A-')) t.fitness = 'FAIL'; }); break;
+            case 'multi_failure': {
+                trainFleet.find(t => t.id === 102).fitness = 'FAIL';
+                trainFleet.find(t => t.id === 110).maintenanceDue = true;
+                trainFleet.find(t => t.id === 121).cleaning = 'Due';
+                break;
+            }
+            case 'vvip_movement': { const train = trainFleet.find(t => t.id === 111); if(train) train.scoreBoost = 1000; break; }
+            case 'component_shortage': trainFleet.forEach(t => { if (t.mileage > 9000) t.fitness = 'FAIL'; }); break;
+            case 'sw_update_fail': trainFleet.forEach(t => { if (t.location.startsWith('D-')) t.fitness = 'FAIL'; }); break;
+            case 'priority_cleaning': trainFleet.forEach(t => { if (t.cleaning === 'Due') t.fitness = 'FAIL'; }); break;
+            case 'reduced_fleet': break; 
+            case 'new_train_126': trainFleet.push({ ...newRakesFleet.find(t=>t.id===126), scoreBoost: 2000 }); break;
+            case 'new_train_127': trainFleet.push({ ...newRakesFleet.find(t=>t.id===127), scoreBoost: 2000 }); break;
+            case 'new_train_128': trainFleet.push({ ...newRakesFleet.find(t=>t.id===128), scoreBoost: 2000 }); break;
+        }
+    }
+
+    let scoredFleet = trainFleet.map(train => {
+        const calculatedTrain = calculateReadiness(train);
+        if(train.scoreBoost) calculatedTrain.score += train.scoreBoost;
+        return calculatedTrain;
+    });
+
+    scoredFleet.sort((a, b) => b.score - a.score);
+    scoredFleetForTimetable = scoredFleet;
+    
+    let trainsNeeded = 20; 
+    demandForTimetable = 'Normal';
+    const calendarFileContent = loadedFiles['calendar.txt'] ? loadedFiles['calendar.txt'].toUpperCase() : '';
+    
+    if (calendarFileContent.includes("WE,0,0,0,0,0,0,1")) { trainsNeeded = 16; demandForTimetable = 'Weekend/Low'; }
+    else if (calendarFileContent.includes("WK,1,1,1,1,1,1,0")){ trainsNeeded = 20; demandForTimetable = 'Weekday/Normal'; }
+    if (scenario === 'reduced_fleet') trainsNeeded = 15;
+    if (scenario === 'onam_rush' || scenario === 'new_year_eve') { trainsNeeded = 25; demandForTimetable = 'High'; }
+
+
+    log(`Service type detected: '${demandForTimetable.toUpperCase()}'. ${trainsNeeded} trains required.`);
+    
+    let recommendedCount = 0, standbyCount = 0, rejectedCount = 0;
+    scoredFleet.forEach((train, index) => {
+        if (train.score <= 0) { train.status = 'Rejected'; rejectedCount++; }
+        else if (index < trainsNeeded) { train.status = 'Recommended'; recommendedCount++; }
+        else if (index < trainsNeeded + 2) { train.status = 'Standby'; standbyCount++; }
+        else { train.status = 'Rejected'; rejectedCount++; }
+    });
+    
+    updateDashboard(scoredFleet, { needed: trainsNeeded, rec: recommendedCount, standby: standbyCount, rej: rejectedCount });
+    dom.generateTimetableBtn.disabled = false;
+    dom.shareRosterBtn.disabled = false;
+    dom.downloadRosterBtn.disabled = false;
+    log("Roster updated. Timetable generation is now enabled.");
+}
+
+function updateDashboard(roster, counts) {
+    dom.trainsRequiredEl.textContent = counts.needed;
+    dom.trainsReadyEl.textContent = counts.rec;
+    dom.trainsStandbyEl.textContent = counts.standby;
+    dom.trainsRejectedEl.textContent = counts.rej;
+    dom.dataSourceDisplay.textContent = `${Object.keys(loadedFiles).length} files`;
+    dom.rosterTableBody.innerHTML = '';
+    roster.forEach((train, index) => {
+        const statusClasses = { Recommended: 'bg-green-100 text-green-800', Standby: 'bg-yellow-100 text-yellow-800', Rejected: 'bg-red-100 text-red-800' };
+        const reasonsHTML = train.reasons.slice(0, 3).map(r => `<span class="inline-block mr-2"><span class="reason-dot ${r.color}"></span>${r.text}</span>`).join('');
+        const row = document.createElement('tr');
+        row.className = 'bg-white border-b hover:bg-gray-50 cursor-pointer';
+        row.dataset.trainId = train.id;
+        row.innerHTML = `<td class="px-6 py-4 font-medium text-gray-900">${index + 1}</td><td class="px-6 py-4 font-bold text-gray-800">#${train.id} – ${rakeNameMap[train.id] || "Unknown"}</td>
+                        <td class="px-6 py-4 text-lg font-semibold ${train.score > 70 ? 'text-green-600' : (train.score > 40 ? 'text-yellow-600' : 'text-red-600')}">${train.score}</td><td class="px-6 py-4"><span class="px-2 py-1 font-semibold leading-tight rounded-full ${statusClasses[train.status]}">${train.status}</span></td><td class="px-6 py-4 text-xs">${reasonsHTML}</td>`;
+        dom.rosterTableBody.appendChild(row);
+    });
+    renderDepotView(roster);
+    renderPassengerDensityGraph();
+}
+
+function renderDepotView(roster) {
+    const depotContainer = dom.depotView;
+    depotContainer.innerHTML = '';
+    
+    const allTrains = [...roster, ...newRakesFleet.filter(newRake => !roster.some(r => r.id === newRake.id))];
+    const depotBlocks = { 'A': [], 'B': [], 'C': [], 'D': [], 'E': [], 'F':[], 'G':[], 'H':[] };
+    allTrains.forEach(train => {
+        const block = train.location.split('-')[0];
+        if (depotBlocks[block]) {
+            depotBlocks[block].push(train);
+        }
+    });
+
+    const statusClasses = { Recommended: 'bg-green-500 text-white', Standby: 'bg-yellow-400 text-black', Rejected: 'bg-red-500 text-white', Default: 'bg-gray-300 text-gray-800' };
+
+    Object.keys(depotBlocks).forEach(blockId => {
+        if (depotBlocks[blockId].length === 0) return;
+        const blockDiv = document.createElement('div');
+        blockDiv.className = 'space-y-2';
+        blockDiv.innerHTML = `<h4 class="font-bold text-gray-700">Block ${blockId}</h4>`;
+        const tracksDiv = document.createElement('div');
+        tracksDiv.className = 'grid grid-cols-5 gap-1';
+
+        depotBlocks[blockId].sort((a,b) => a.location.localeCompare(b.location)).forEach(train => {
+            const trainDiv = document.createElement('div');
+            const statusClass = statusClasses[train.status] || statusClasses.Default;
+            trainDiv.className = `p-2 rounded text-center text-xs font-bold ${statusClass} cursor-pointer hover:scale-110 transition-transform`;
+            trainDiv.textContent = `#${train.id} – ${rakeNameMap[train.id] || "?"}`;
+            trainDiv.onclick = () => openModal(train);
+            tracksDiv.appendChild(trainDiv);
+        });
+
+        blockDiv.appendChild(tracksDiv);
+        depotContainer.appendChild(blockDiv);
+    });
+}
+
+function renderPassengerDensityGraph() {
+    dom.densityGraph.innerHTML = '';
+    if (Object.keys(stopData).length === 0) {
+        dom.densityGraph.innerHTML = '<div class="text-center text-gray-500 self-center">Upload stops.txt to view density.</div>';
+        return;
+    }
+
+    const stopsOrder = ['TPHT', 'SNJN', 'VAKK', 'PETT', 'THYK', 'VYTA', 'EMKM', 'KVTR', 'ERSH', 'MACE', 'MGRD', 'TNHL', 'KALR', 'JLSD', 'PARV', 'CGPP', 'EDAP', 'PDPM', 'CCUV', 'KLMT', 'MUTT', 'ATTK', 'CPPY', 'PNCU', 'ALVA'];
+    const demandMultiplier = demandForTimetable.includes('High') ? 1.5 : (demandForTimetable.includes('Low') ? 0.7 : 1);
+    
+    stopsOrder.forEach(stopId => {
+        const station = stopData[stopId];
+        if (!station) return;
+
+        const density = Math.floor((Math.random() * 60 + 20) * demandMultiplier);
+        let barColor = 'bg-green-400';
+        if (density > 80) barColor = 'bg-red-500';
+        else if (density > 60) barColor = 'bg-yellow-400';
+
+        const stationName = station[currentLang] || station['en'];
+
+        const barWrapper = document.createElement('div');
+        barWrapper.className = 'flex flex-col items-center justify-end h-full';
+        barWrapper.innerHTML = `
+            <div class="font-bold text-xs ${density > 80 ? 'text-red-600' : 'text-gray-700'}">${density}%</div>
+            <div class="${barColor} w-4 md:w-6 rounded-t-sm" style="height: ${density}%" title="${stationName}: ${density}% Full"></div>
+            <div class="text-xs font-medium text-gray-600 mt-1" style="writing-mode: vertical-rl; text-orientation: mixed;">${stationName}</div>
+        `;
+        dom.densityGraph.appendChild(barWrapper);
+    });
+}
+
+
+function generateAndDisplayTimetable() {
+    log("Generating dynamic timetable...");
+    const recommendedTrains = scoredFleetForTimetable.filter(t => t.status === 'Recommended').map(t => t.id);
+    if (recommendedTrains.length === 0) { log("No recommended trains to generate timetable."); return; }
+
+    const headwayMinutes = { 'High': 5, 'Weekday/Normal': 9, 'Weekend/Low': 11 }[demandForTimetable] || 9;
+    log(`Using headway of ${headwayMinutes} minutes based on '${demandForTimetable}' demand.`);
+    
+    const startTime = 6 * 60; const endTime = (demandForTimetable === 'High') ? (23 * 60 + 30) : (22 * 60 + 30) ;
+    timetableData = { up: [], down: [] }; // Reset
+    let upTrainIndex = 0, downTrainIndex = Math.floor(recommendedTrains.length / 2);
+
+    for (let time = startTime; time <= endTime; time += headwayMinutes) {
+        const hours = Math.floor(time / 60).toString().padStart(2, '0');
+        const minutes = (time % 60).toString().padStart(2, '0');
+        const formattedTime = `${hours}:${minutes}`;
+        timetableData.up.push({ time: formattedTime, trainId: recommendedTrains[upTrainIndex] });
+        upTrainIndex = (upTrainIndex + 1) % recommendedTrains.length;
+        if (time >= startTime + 5) {
+             timetableData.down.push({ time: formattedTime, trainId: recommendedTrains[downTrainIndex] });
+             downTrainIndex = (downTrainIndex + 1) % recommendedTrains.length;
+        }
+    }
+    
+    displayTimetable(timetableData.up, timetableData.down);
+    dom.shareTimetableBtn.disabled = false;
+    dom.downloadTimetableBtn.disabled = false;
+    dom.toggleTrackerBtn.disabled = false; // Enable tracker button
+    log("Timetable generated successfully. Live tracker is now available.");
+}
+
+function displayTimetable(up, down) {
+    updateTimetableHeaders();
+    dom.timetableUpContent.innerHTML = '';
+    up.forEach(trip => { dom.timetableUpContent.innerHTML += `<div class="text-xs p-1 bg-white rounded shadow-sm flex justify-between"><span>${trip.time}</span><span class="font-semibold">Train #${trip.trainId} – ${rakeNameMap[trip.trainId] || "?"}</span></div>`; });
+    dom.timetableDownContent.innerHTML = '';
+    down.forEach(trip => { dom.timetableDownContent.innerHTML += `<div class="text-xs p-1 bg-white rounded shadow-sm flex justify-between"><span>${trip.time}</span><span class="font-semibold">Train #${trip.trainId} – ${rakeNameMap[trip.trainId] || "?"}</span></div>`; });
+}
+
+function showToast(message) {
+    dom.toast.textContent = message;
+    dom.toast.classList.add('show');
+    setTimeout(() => {
+        dom.toast.classList.remove('show');
+    }, 3000);
+}
+
+async function shareData(type) {
+    let title = '';
+    let text = '';
+    if (type === 'roster') {
+        title = 'Kochi Metro - Daily Train Roster';
+        let rosterText = 'Kochi Metro - Daily Train Roster\n\n';
+        const rows = dom.rosterTableBody.querySelectorAll('tr');
+        rows.forEach(row => {
+            const cells = row.querySelectorAll('td');
+            if (cells.length === 5) { rosterText += `Rank ${cells[0].innerText}: Train ${cells[1].innerText} (Score: ${cells[2].innerText}) - ${cells[3].innerText}\n`; }
+        });
+        text = rosterText;
+    } else if (type === 'timetable') {
+        title = 'Kochi Metro - Daily Timetable';
+        let timetableText = 'Kochi Metro - Daily Timetable\n\n';
+        timetableText += `*${document.getElementById('timetable-up-header').textContent}*\n`;
+        document.querySelectorAll('#timetable-up-content .flex').forEach(div => { timetableText += `${div.children[0].innerText} - ${div.children[1].innerText}\n`; });
+        timetableText += `\n*${document.getElementById('timetable-down-header').textContent}*\n`;
+        document.querySelectorAll('#timetable-down-content .flex').forEach(div => { timetableText += `${div.children[0].innerText} - ${div.children[1].innerText}\n`; });
+        text = timetableText;
+    }
+
+    if (navigator.share) {
+        try {
+            await navigator.share({ title, text }); log('Shared successfully via Web Share API.'); return;
+        } catch (err) {
+            log('Web Share API failed. Trying clipboard...');
+        }
+    }
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('Copied to clipboard!'); log('Copied to clipboard using modern API.');
+    } catch (err) {
+        log('Modern copy API failed. Trying legacy method...');
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';  textArea.style.top = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('Copied to clipboard!'); log('Copied to clipboard using legacy method.');
+        } catch (err) {
+            log('Error: Both modern and legacy copy methods failed.'); showToast('Copy failed. Please copy manually.');
+        }
+        document.body.removeChild(textArea);
+    }
+}
+
+function downloadExcel(type) {
+    let data = [];
+    let filename = 'report.xlsx';
+    if(type === 'roster') {
+        filename = 'Daily_Roster.xlsx';
+        data.push(['Rank', 'Train ID', 'Readiness Score', 'Status', 'Key Reasons']);
+        scoredFleetForTimetable.forEach((train, index) => {
+            data.push([
+                index + 1,
+                train.id,
+                train.score,
+                train.status,
+                train.reasons.map(r => r.text).join(', ')
+            ]);
+        });
+    } else if (type === 'timetable') {
+        filename = 'Daily_Timetable.xlsx';
+        const upHeader = document.getElementById('timetable-up-header').textContent;
+        const downHeader = document.getElementById('timetable-down-header').textContent;
+        data.push([upHeader, '', downHeader, '']);
+        data.push(['Time', 'Train ID', 'Time', 'Train ID']);
+        const maxLen = Math.max(timetableData.up.length, timetableData.down.length);
+        for(let i=0; i<maxLen; i++) {
+            const up = timetableData.up[i] || {time: '', trainId: ''};
+            const down = timetableData.down[i] || {time: '', trainId: ''};
+            data.push([up.time, up.trainId, down.time, down.trainId]);
+        }
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.writeFile(wb, filename);
+    log(`Downloaded ${filename} successfully.`);
+}
+
+function timeToSeconds(timeStr) {
+    if (!timeStr || !timeStr.includes(':')) return 0;
+    const [h, m, s] = timeStr.split(':').map(Number);
+    return h * 3600 + m * 60 + s;
+}
+
+function secondsToTime(secs) {
+    const h = Math.floor(secs / 3600).toString().padStart(2, '0');
+    const m = Math.floor((secs % 3600) / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+}
+
+function toggleLiveTracker() {
+    if (liveTrackerInterval) {
+        clearInterval(liveTrackerInterval);
+        liveTrackerInterval = null;
+        dom.toggleTrackerBtn.textContent = 'Start';
+        dom.toggleTrackerBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+        dom.toggleTrackerBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+        dom.simulatedTime.classList.remove('blinking');
+    } else {
+        if (!loadedFiles['stop_times.txt'] || !loadedFiles['trips.txt']) {
+            log('Error: stop_times.txt and trips.txt must be uploaded to start tracker.');
+            showToast('Missing required files for tracker!');
+            return;
+        }
+
+        // Build the schedule from files
+        const recommendedTrainIds = new Set(scoredFleetForTimetable.filter(t => t.status === 'Recommended').map(t => t.id));
+        const trips = parseCSV(loadedFiles['trips.txt']);
+        const stopTimes = parseCSV(loadedFiles['stop_times.txt']);
+        
+        tripToTrainMap = {};
+        let assignedTrainIndex = 0;
+        const trainIdArray = Array.from(recommendedTrainIds);
+        
+        trips.forEach(trip => {
+             if (assignedTrainIndex < trainIdArray.length) {
+                tripToTrainMap[trip.trip_id] = trainIdArray[assignedTrainIndex];
+                assignedTrainIndex = (assignedTrainIndex + 1) % trainIdArray.length;
+             }
+        });
+
+        masterSchedule = [];
+        stopTimes.forEach(st => {
+            if (tripToTrainMap[st.trip_id]) {
+                masterSchedule.push({ time: st.arrival_time, timeInSeconds: timeToSeconds(st.arrival_time), type: 'Arrival', trip_id: st.trip_id, stop_id: st.stop_id });
+                masterSchedule.push({ time: st.departure_time, timeInSeconds: timeToSeconds(st.departure_time), type: 'Departure', trip_id: st.trip_id, stop_id: st.stop_id });
+            }
+        });
+        masterSchedule.sort((a, b) => a.timeInSeconds - b.timeInSeconds);
+        lastProcessedEventIndex = 0;
+        
+        simulatedClock = 6 * 3600; // Reset clock
+        dom.liveTrackerLog.innerHTML = '<p class="text-gray-400">Starting simulation...</p>';
+        dom.toggleTrackerBtn.textContent = 'Pause';
+        dom.toggleTrackerBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+        dom.toggleTrackerBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+        dom.simulatedTime.classList.add('blinking');
+
+        liveTrackerInterval = setInterval(runTracker, 1000); // Update every second
+    }
+}
+
+let lastProcessedEventIndex = 0;
+function runTracker() {
+    const timeStep = 10 * 60; // 10 minutes per tick
+    const newTime = simulatedClock + timeStep;
+    dom.simulatedTime.textContent = secondsToTime(simulatedClock);
+
+    const eventsThisTick = masterSchedule.slice(lastProcessedEventIndex).filter(event => event.timeInSeconds >= simulatedClock && event.timeInSeconds < newTime);
+    
+    eventsThisTick.forEach(event => {
+        const physicalTrainId = tripToTrainMap[event.trip_id];
+        if (physicalTrainId) { 
+            const stationName = (stopData[event.stop_id] && stopData[event.stop_id][currentLang]) || stopData[event.stop_id]?.en || event.stop_id;
+            const eventColor = event.type === 'Arrival' ? 'text-green-400' : 'text-blue-400';
+            const logEntry = document.createElement('p');
+            logEntry.innerHTML = `<span>[${event.time}]</span> <span class="${eventColor}">${event.type}</span>: Train #${physicalTrainId} at ${stationName}`;
+            dom.liveTrackerLog.prepend(logEntry);
+        }
+    });
+
+    lastProcessedEventIndex += eventsThisTick.length;
+    simulatedClock = newTime;
+
+    if (simulatedClock > 23 * 3600) { // Stop simulation after 11 PM
+        toggleLiveTracker();
+        log("Live tracker simulation for the day has ended.");
+    }
+}
+// ---- REAL-TIME PANEL ----
+const WEATHER_API_KEY = "df8b18bf51a433572e5c749c026f2256"; // get a free key at openweathermap.org
+const LAT = 9.9312, LON = 76.2673; // Kochi coordinates
+
+function updateDateTimePanel() {
+  const now = new Date();
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  document.getElementById("rt-date").innerText = "Date: " + now.toLocaleDateString();
+  document.getElementById("rt-day").innerText = "Day: " + days[now.getDay()];
+  document.getElementById("rt-time").innerText = "Time: " + now.toLocaleTimeString();
+}
+
+async function updateWeatherPanel() {
+  try {
+    const res = await fetch(
+      `https://api.openweathermap.org/data/2.5/weather?lat=${LAT}&lon=${LON}&units=metric&appid=${WEATHER_API_KEY}`
+    );
+    const data = await res.json();
+    document.getElementById("rt-weather").innerText = "Weather: " + data.weather[0].description;
+    document.getElementById("rt-temp").innerText = "Temperature: " + data.main.temp.toFixed(1) + " °C";
+    document.getElementById("rt-feelslike").innerText = "Feels Like: " + data.main.feels_like.toFixed(1) + " °C";
+    document.getElementById("rt-humidity").innerText = "Humidity: " + data.main.humidity + "%";
+    document.getElementById("rt-wind").innerText = "Wind: " + data.wind.speed + " km/h";
+    document.getElementById("rt-sun").innerText =
+      "Sunrise: " + new Date(data.sys.sunrise*1000).toLocaleTimeString() +
+      " | Sunset: " + new Date(data.sys.sunset*1000).toLocaleTimeString();
+  } catch (err) {
+    console.error("Weather fetch error", err);
+    document.getElementById("rt-weather").innerText = "Weather: (error)";
+  }
+}
+
+// initial run
+updateDateTimePanel();
+updateWeatherPanel();
+
+// update time every second
+setInterval(updateDateTimePanel, 1000);
+// update weather every 5 mins
+setInterval(updateWeatherPanel, 5*60*1000);
+// --- EVENT LISTENERS ---
+dom.fileUploader.addEventListener('change', (event) => {
+    const files = event.target.files;
+    if (files.length > 0) {
+        loadedFiles = {};
+        dom.filePreview.innerHTML = '';
+        dom.fileName.textContent = `${files.length} files selected`;
+        let filesProcessed = 0;
+        Array.from(files).forEach(file => {
+            const p = document.createElement('p');
+            if (file.type === 'text/plain' || file.name.endsWith('.txt') || file.name.endsWith('.csv')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    loadedFiles[file.name] = e.target.result;
+                    p.textContent = `✓ ${file.name} (content loaded)`;
+                    p.className = 'text-green-700';
+                    filesProcessed++;
+                    if (filesProcessed === files.length) {
+                        dom.generateBtn.disabled = false;
+                        processUploadedFiles();
+                        log(`${files.length} files loaded. Ready to generate roster.`);
+                    }
+                };
+                reader.readAsText(file);
+            } else {
+                loadedFiles[file.name] = 'non-text file';
+                p.textContent = `✓ ${file.name} (uploaded)`;
+                p.className = 'text-blue-700';
+                 filesProcessed++;
+                if (filesProcessed === files.length) {
+                    dom.generateBtn.disabled = false;
+                    processUploadedFiles();
+                    log(`${files.length} files loaded. Ready to generate roster.`);
+                }
+            }
+            dom.filePreview.appendChild(p);
+        });
+    } else {
+        loadedFiles = {};
+        dom.fileName.textContent = 'No files selected.';
+        dom.filePreview.textContent = 'Uploaded file list will appear here...';
+        dom.generateBtn.disabled = true;
+    }
+});
+
+dom.generateBtn.addEventListener('click', generateRoster);
+dom.generateTimetableBtn.addEventListener('click', generateAndDisplayTimetable);
+dom.shareRosterBtn.addEventListener('click', () => shareData('roster'));
+dom.shareTimetableBtn.addEventListener('click', () => shareData('timetable'));
+dom.downloadRosterBtn.addEventListener('click', () => downloadExcel('roster'));
+dom.downloadTimetableBtn.addEventListener('click', () => downloadExcel('timetable'));
+dom.closeModalBtn.addEventListener('click', closeModal);
+dom.modalOverlay.addEventListener('click', closeModal);
+dom.toggleTrackerBtn.addEventListener('click', toggleLiveTracker);
+
+dom.rosterTableBody.addEventListener('click', (e) => {
+    const row = e.target.closest('tr');
+    if (row && row.dataset.trainId) {
+        const trainId = parseInt(row.dataset.trainId);
+        const train = scoredFleetForTimetable.find(t => t.id === trainId);
+        if (train) openModal(train);
+    }
+});
+
+dom.languageDropdownBtn.addEventListener('click', () => {
+    dom.languageDropdownMenu.classList.toggle('hidden');
+});
+
+window.addEventListener('click', (e) => {
+    if (!dom.languageSwitcher.contains(e.target)) {
+        dom.languageDropdownMenu.classList.add('hidden');
+    }
+});
+
+dom.languageDropdownMenu.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (e.target.matches('.lang-option')) {
+        const newLang = e.target.dataset.lang;
+        if (newLang !== currentLang) {
+            currentLang = newLang;
+            dom.currentLangDisplay.textContent = newLang.toUpperCase();
+            updateTimetableHeaders();
+            if (!dom.generateTimetableBtn.disabled) {
+                generateAndDisplayTimetable();
+            }
+            if(scoredFleetForTimetable.length > 0) {
+                 renderPassengerDensityGraph();
+            }
+        }
+        dom.languageDropdownMenu.classList.add('hidden');
+    }
+});
+
+// Initialize Depot View on load
+renderDepotView(pristineTrainFleet);
+// ---- DARK MODE LOGIC ----
+const darkModeToggle = document.getElementById("darkModeToggle");
+const htmlEl = document.documentElement;
+
+// Apply saved theme or system preference
+if (localStorage.getItem("theme") === "dark" ||
+   (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+  htmlEl.classList.add("dark");
+  darkModeToggle.textContent = "☀️ Light";
+}
+
+// Toggle theme on button click
+darkModeToggle.addEventListener("click", () => {
+  htmlEl.classList.toggle("dark");
+  if (htmlEl.classList.contains("dark")) {
+    localStorage.setItem("theme", "dark");
+    darkModeToggle.textContent = "☀️ Light";
+  } else {
+    localStorage.setItem("theme", "light");
+    darkModeToggle.textContent = "🌙 Dark";
+  }
+});
+// ===== Kochi Metro Interactive Map =====
+document.addEventListener("DOMContentLoaded", () => {
+  const map = L.map("kochiMetroMap").setView([10.0, 76.3], 12); // Center on Kochi
+
+  // OpenStreetMap base layer
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+
+  // Coordinates of Kochi Metro stations (Aluva -> SN Junction -> Tripunithura)
+  const stations = [
+    ["Aluva", 10.1119, 76.3516],
+    ["Pulinchodu", 10.1036, 76.3488],
+    ["Companypady", 10.0961, 76.3495],
+    ["Ambattukavu", 10.0865, 76.3487],
+    ["Muttom", 10.0788, 76.3458],
+    ["Kalamassery", 10.0713, 76.3413],
+    ["CUSAT", 10.0628, 76.3384],
+    ["Pathadipalam", 10.0539, 76.3361],
+    ["Edapally", 10.0446, 76.3238],
+    ["Changampuzha Park", 10.0360, 76.3159],
+    ["Palarivattom", 10.0280, 76.3093],
+    ["JLN Stadium", 10.0225, 76.3050],
+    ["Kaloor", 10.0173, 76.2969],
+    ["Town Hall", 10.0124, 76.2921],
+    ["M.G. Road", 9.9999, 76.2878],
+    ["Maharaja's College", 9.9936, 76.2876],
+    ["Ernakulam South", 9.9818, 76.2854],
+    ["Kadavanthra", 9.9763, 76.2938],
+    ["Elamkulam", 9.9703, 76.3013],
+    ["Vyttila", 9.9664, 76.3124],
+    ["Thaikoodam", 9.9567, 76.3247],
+    ["Petta", 9.9474, 76.3365],
+    ["SN Junction", 9.9413, 76.3378],
+    ["Tripunithura", 9.9460, 76.3440]
+  ];
+
+  // Draw markers and build polyline points
+  const latlngs = [];
+  stations.forEach(([name, lat, lon]) => {
+    latlngs.push([lat, lon]);
+    L.circleMarker([lat, lon], {
+      radius: 5,
+      color: "#0ea5e9",
+      fillColor: "#0ea5e9",
+      fillOpacity: 1
+    })
+      .bindPopup(`<strong>${name}</strong>`)
+      .bindTooltip(name, { permanent: false })
+      .addTo(map);
+  });
+
+  // Draw the route line
+  L.polyline(latlngs, { color: "#0ea5e9", weight: 5, opacity: 0.85 }).addTo(map);
+
+  // Auto zoom to fit the line
+  map.fitBounds(L.latLngBounds(latlngs), { padding: [30, 30] });
+});
+</script>
+
+</body>
+</html>
+

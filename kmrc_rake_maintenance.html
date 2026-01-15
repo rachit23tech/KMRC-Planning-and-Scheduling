@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>KMRL Rake Maintenance & Schedule Simulator</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+  .blink { animation: blinker 1s linear infinite; }
+  @keyframes blinker { 50% { opacity: 0.25; } }
+  .card { background: white; border-radius: .5rem; box-shadow: 0 6px 18px rgba(0,0,0,0.06); padding: 1rem; }
+  .small { font-size: .85rem; color: #4b5563; }
+  .roster-table th, .roster-table td { padding: .5rem .75rem; border-bottom: 1px solid #eef2f7; }
+  .status-dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:.5rem; }
+  .green { background:#10b981; } .yellow { background:#f59e0b; } .red { background:#ef4444; }
+</style>
+</head>
+<body class="bg-gray-100 text-gray-800 dark:bg-gray-900">
+
+<!-- NAV -->
+<nav class="bg-cyan-700 text-white px-6 py-3 flex items-center justify-between">
+  <div class="flex items-center space-x-4">
+    <h1 class="text-lg font-bold">KMRL — Rake Maintainance</h1>
+    <button id="realBtn" class="bg-green-500 hover:bg-green-600 px-3 py-1 rounded text-sm">Real-Time</button>
+    <button id="demoBtn" class="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded text-sm">Demo Mode</button>
+    <button id="resetDay" class="bg-gray-800 hover:bg-gray-900 px-3 py-1 rounded text-sm">Reset Day</button>
+    <button id="genSchedule" class="bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded">Generate Schedule</button>
+  </div>
+  <div class="space-x-6">
+    <a href="kmrc_v5_plus_inspection.html" class="hover:underline">Dashboard</a>
+    <a href="kmrc_inspectv4.html" class="hover:underline">Inspection</a>
+    <a href="kmrc_simulation.html" class="hover:underline">Simulation</a>
+    <a href="kmrc_rake_maintenance.html" class="hover:underline">Rake Maintainance</a>
+  <button id="darkModeToggle"
+      class="ml-4 bg-gray-200 dark:bg-gray-700 dark:text-gray-100 text-gray-700 px-3 py-1 rounded-md hover:bg-gray-300 dark:hover:bg-gray-600 transition">
+      🌙 Dark
+    </button>
+    </div>
+</nav>
+
+<main class="container mx-auto p-6 space-y-6">
+
+  <!-- Top panels: roster + summary -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="card col-span-2">
+      <div class="flex justify-between items-start">
+        <div>
+          <h2 class="text-xl font-bold">Today's Roster & Details</h2>
+          <p class="small mt-1">Job card, mileage, cleanliness & telecom — used to decide service/standby/reject</p>
+        </div>
+        <div class="text-right small">
+          <div>Service: <span id="countService">--</span></div>
+          <div>Standby: <span id="countStandby">--</span></div>
+          <div>Rejected: <span id="countRejected">--</span></div>
+        </div>
+      </div>
+
+      <div class="mt-4 overflow-x-auto">
+        <table class="w-full roster-table text-sm">
+          <thead>
+            <tr class="bg-gray-50 text-left text-xs text-gray-600">
+              <th>Rank</th><th>Rake</th><th>Job Card</th><th>Mileage (km)</th><th>Cleanliness</th><th>Telecom</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="rosterBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="font-semibold">Operation Panel</h3>
+      <p class="small mt-2">Mode: <strong id="modeLabel">Real-Time</strong></p>
+      <div class="text-xs small">Clock: <span id="clockDisplay">--:--</span> (<span id="modeLabel">Real-Time/Demo-Time</span>)</div>
+
+      <div class="mt-4 space-y-3">
+        <div><button id="startAuto" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-white">Start Simulation</button></div>
+        <div><button id="stopAuto" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-white">Stop Simulation</button></div>
+        <div class="small">Cleaning times: Real = 60s, Demo = 15s. Fault chance = 0.01%.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Simulation panels: line + bay status -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="card">
+      <h3 class="font-semibold">Line Simulation (Aluva ↔ Thrippunithura)</h3>
+      <p class="small mt-1">Shows trains moving; blue dot indicates currently at terminal/bay/departed.</p>
+      <div id="lineVisual" class="mt-4 space-y-2"></div>
+    </div>
+
+    <div class="card">
+      <h3 class="font-semibold">Bays & Depot</h3>
+      <div class="mt-3 space-y-2">
+        <div>Terminal Cleaning Bays: <span id="bayCount">0</span></div>
+        <div>Depot (Muttom) Count: <span id="depotCount">0</span></div>
+        <div class="mt-3">
+          <div id="bayList" class="space-y-1 small"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Logs -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div class="card">
+      <h3 class="font-semibold">Arrival / Departure Log</h3>
+      <div id="arrLog" class="font-mono text-sm h-64 overflow-y-auto mt-3 bg-gray-50 p-2 rounded"></div>
+    </div>
+    <div class="card">
+      <h3 class="font-semibold">Bay / Depot Log</h3>
+      <div id="bayLog" class="font-mono text-sm h-64 overflow-y-auto mt-3 bg-gray-50 p-2 rounded"></div>
+    </div>
+  </section>
+<footer>
+    <div class="flex items-center space-x-3 text-sm"> 
+    <button id="exportRoster" class="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded">Export Roster</button>
+    <button id="exportLogs" class="bg-yellow-500 hover:bg-yellow-600 px-3 py-1 rounded">Export Logs</button>
+    </div>
+    <p class="text-sm text-gray-500 mt-4 text-center py-4">© 2025 OnTrack. All Rights Reserved.</p>
+</footer>
+</main>
+
+<script>
+/*
+  KMRL Rake Simulator
+  - 25 rakes (101..125) with official names
+  - Real-time default; Demo mode available
+  - Generates roster, simulates runs and bay operations
+*/
+
+// ------------- configuration -------------
+const RAKES = [
+  {id:"101",name:"KRISHNA"},{id:"102",name:"TAPTI"},{id:"103",name:"NILA"},{id:"104",name:"SARAYU"},
+  {id:"105",name:"ARUTH"},{id:"106",name:"VAIGAI"},{id:"107",name:"JHANAVI"},{id:"108",name:"DHWANIL"},
+  {id:"109",name:"BHAVANI"},{id:"110",name:"PADMA"},{id:"111",name:"MANDAKINI"},{id:"112",name:"YAMUNA"},
+  {id:"113",name:"PERIYAR"},{id:"114",name:"KABANI"},{id:"115",name:"VAAYU"},{id:"116",name:"KAVERI"},
+  {id:"117",name:"SHIRIYA"},{id:"118",name:"PAMPA"},{id:"119",name:"NARMADA"},{id:"120",name:"MAHE"},
+  {id:"121",name:"MAARUT"},{id:"122",name:"SABARMATHI"},{id:"123",name:"GODHAVARI"},{id:"124",name:"GANGA"},
+  {id:"125",name:"PAVAN"}
+];
+
+const ENDPOINTS = ["Aluva","Thrippunithura"];
+const CLEANING_TIME = { real: 60*1000, demo: 15*1000 };   // ms
+const FAULT_PROB = 0.0001; // 0.01% => 0.0001
+const DEMO_TICK_MS = 1000; // demo clock: 1s = 1 min simulated
+const REAL_TICK_MS = 1000; // real mode clock update interval (but train movement tick is every minute in real world simulated as 60s)
+const REAL_MOVEMENT_INTERVAL = 60*1000; // 60s per station in real-time simulation
+// -----------------------------------------------------
+
+// ------------- state -------------
+let mode = "real"; // 'real' or 'demo'
+let simRunning = false;
+let roster = []; // populated by generateSchedule()
+let trainState = {}; // per train: {status, direction, nextTickRemainingMs, atTerminal, inBay, inDepot}
+let bayQueue = []; // trains in terminal cleaning bays
+let depotQueue = [];
+let arrLogEl = document.getElementById('arrLog');
+let bayLogEl = document.getElementById('bayLog');
+let rosterBody = document.getElementById('rosterBody');
+let lineVisual = document.getElementById('lineVisual');
+let bayListEl = document.getElementById('bayList');
+let bayCountEl = document.getElementById('bayCount');
+let depotCountEl = document.getElementById('depotCount');
+let countService = document.getElementById('countService');
+let countStandby = document.getElementById('countStandby');
+let countRejected = document.getElementById('countRejected');
+let clockDisplay = document.getElementById('clockDisplay');
+let modeLabel = document.getElementById('modeLabel');
+
+let clockTimer = null;
+let movementTimer = null;
+let demoSimMinute = {hour:5, minute:0}; // demo starts at 05:00
+
+// ------------- helpers -------------
+function rand(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function chance(p){ return Math.random() < p; }
+function nowStr(){ return new Date().toLocaleTimeString(); }
+function simTimeStr(){ return `${String(demoSimMinute.hour).padStart(2,'0')}:${String(demoSimMinute.minute).padStart(2,'0')}`; }
+
+// ------------- UI mode buttons -------------
+document.getElementById('realBtn').addEventListener('click', ()=>{
+  setMode('real');
+});
+document.getElementById('demoBtn').addEventListener('click', ()=>{
+  setMode('demo');
+});
+document.getElementById('genSchedule').addEventListener('click', ()=>{ generateSchedule(); renderRoster(); });
+document.getElementById('startAuto').addEventListener('click', ()=>{ startSimulation(); });
+document.getElementById('stopAuto').addEventListener('click', ()=>{ stopSimulation(); });
+document.getElementById('resetDay').addEventListener('click', ()=>{ resetDay(); });
+
+// ------------- initialize -------------
+setMode('real'); // default real-time on load
+generateSchedule();
+renderRoster();
+renderLineVisual();
+updateCounts();
+
+// ------------- functions -------------
+function setMode(m){
+  mode = m;
+  modeLabel.textContent = (m==='real'?'Real-Time':'Demo');
+  document.getElementById('realBtn').classList.toggle('opacity-50', m!=='real');
+  document.getElementById('demoBtn').classList.toggle('opacity-50', m!=='demo');
+  // update clock immediately
+  if(mode==='demo'){
+    // set demo start time to 05:00 if first time or keep current demoSimMinute
+    if(!simRunning){
+      demoSimMinute = {hour:5, minute:0};
+    }
+    clockDisplay.textContent = simTimeStr();
+  } else {
+    // real time display
+    updateClockReal();
+  }
+}
+
+// generate roster randomly based on jobcard/mileage/cleanliness/telecom
+function generateSchedule(){
+  roster = RAKES.map((r, idx) => {
+    // jobCard: 95% OK, 5% issue
+    const jobOk = !chance(0.05);
+    // mileage: 1000..12000
+    const mileage = rand(1000,12000);
+    // cleanliness: 20% Dirty
+    const clean = !chance(0.20);
+    // telecom: 98% OK
+    const telecom = !chance(0.02);
+    return {
+      id: r.id,
+      name: r.name,
+      jobOk,
+      mileage,
+      clean,
+      telecom,
+      score: 0,
+      finalStatus: 'service' // by default
+    };
+  });
+
+  // compute a score and mark rejections/standby
+  roster.forEach(item=>{
+    let s = 0;
+    if(item.jobOk) s+=40; else s-=50;
+    if(item.clean) s+=20; else s-=10;
+    if(item.telecom) s+=15; else s-=20;
+    s += Math.max(0, Math.round((12000 - item.mileage)/500)); // lower mileage higher score
+    item.score = s;
+  });
+
+  // pick 3-4 lowest scores for reject
+  let sorted = [...roster].sort((a,b)=>a.score - b.score);
+  let rejectCount = rand(3,4);
+  for(let i=0;i<rejectCount;i++){
+    sorted[i].finalStatus = 'rejected';
+  }
+  // pick 2-4 standby after rejects
+  let standbyCount = rand(2,4);
+  for(let i=rejectCount;i<rejectCount+standbyCount;i++){
+    sorted[i].finalStatus = (sorted[i].finalStatus==='rejected') ? 'rejected' : 'standby';
+  }
+  // others service
+  roster = sorted.map((s, idx) => s);
+
+  // initialize trainState
+  trainState = {};
+  roster.forEach((r,i)=>{
+    trainState[r.id] = {
+      direction: (i%2===0)?0:1, // alternate directions
+      atEndpoint: false,
+      // next event time (ms) — we schedule arrival/departure every headway
+      nextTickMs: (mode==='demo'?2000:REAL_MOVEMENT_INTERVAL) + rand(0, 20*1000),
+      inBay: false,
+      inDepot: false,
+      lastEvent: null
+    };
+  });
+
+  // logs clear for new day
+  arrLogEl.innerHTML = '';
+  bayLogEl.innerHTML = '';
+  updateCounts();
+}
+
+// render roster table
+function renderRoster(){
+  rosterBody.innerHTML = '';
+  roster.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    tr.className = 'text-sm';
+    tr.innerHTML = `
+      <td class="w-12">${idx+1}</td>
+      <td><strong>${r.id} - ${r.name}</strong></td>
+      <td class="small">${r.jobOk?'<span class="text-green-600">OK</span>':'<span class="text-red-600">Issue</span>'}</td>
+      <td class="small">${r.mileage.toLocaleString()}</td>
+      <td class="small">${r.clean?'<span class="text-green-600">Clean</span>':'<span class="text-yellow-600">Needs Clean</span>'}</td>
+      <td class="small">${r.telecom?'<span class="text-green-600">OK</span>':'<span class="text-red-600">Issue</span>'}</td>
+      <td class="small"><span class="status-dot ${r.finalStatus==='service'?'green':(r.finalStatus==='standby'?'yellow':'red')}" ></span>${r.finalStatus.toUpperCase()}</td>
+    `;
+    rosterBody.appendChild(tr);
+  });
+}
+
+// update counts
+function updateCounts(){
+  const s = roster.filter(r=>r.finalStatus==='service').length;
+  const st = roster.filter(r=>r.finalStatus==='standby').length;
+  const rej = roster.filter(r=>r.finalStatus==='rejected').length;
+  countService.textContent = s;
+  countStandby.textContent = st;
+  countRejected.textContent = rej;
+}
+
+// render a simple line visual (list of trains & their state)
+function renderLineVisual(){
+  lineVisual.innerHTML = '';
+  roster.forEach(r=>{
+    const el = document.createElement('div');
+    el.id = 'lv-'+r.id;
+    el.className = 'flex items-center justify-between p-2 border-b';
+    const left = document.createElement('div');
+    left.innerHTML = `<strong>${r.id} - ${r.name}</strong> <span class="small ml-2">(${r.finalStatus})</span>`;
+    const right = document.createElement('div');
+    right.id = 'state-' + r.id;
+    right.className = 'small text-right';
+    right.innerHTML = 'Idle';
+    el.appendChild(left); el.appendChild(right);
+    lineVisual.appendChild(el);
+  });
+}
+
+// start simulation loops
+function startSimulation(){
+  if(simRunning) return;
+  simRunning = true;
+  logArr(`[SYS] Simulation started (${mode}).`);
+  // clock timer
+  if(mode==='demo'){
+    clockDisplay.textContent = simTimeStr();
+    clockTimer = setInterval(()=>{ // demo tick: advance 1 minute per real second
+      demoSimMinute.minute++;
+      if(demoSimMinute.minute>=60){ demoSimMinute.minute=0; demoSimMinute.hour++; if(demoSimMinute.hour>=24) demoSimMinute.hour=0;}
+      clockDisplay.textContent = simTimeStr();
+    }, DEMO_TICK_MS);
+    movementTimer = setInterval(simulationTick, DEMO_TICK_MS); // movement every DEMO_TICK_MS (~1s)
+  } else {
+    updateRealClock();
+    clockTimer = setInterval(updateRealClock, REAL_TICK_MS);
+    movementTimer = setInterval(simulationTick, REAL_MOVEMENT_INTERVAL); // movement every 60s
+  }
+}
+
+// stop simulation
+function stopSimulation(){
+  if(!simRunning) return;
+  simRunning = false;
+  clearInterval(clockTimer); clearInterval(movementTimer);
+  clockTimer = null; movementTimer = null;
+  logArr("[SYS] Simulation stopped.");
+}
+
+// reset day
+function resetDay(){
+  stopSimulation();
+  generateSchedule();
+  renderRoster();
+  renderLineVisual();
+  bayQueue = []; depotQueue = [];
+  bayListEl.innerHTML = '';
+  bayCountEl.textContent = '0';
+  depotCountEl.textContent = '0';
+  arrLogEl.innerHTML = '';
+  bayLogEl.innerHTML = '';
+  logBay("[SYS] Day reset.");
+}
+
+// update real clock
+function updateClockReal(){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,"0");
+  const mm = String(now.getMinutes()).padStart(2,"0");
+  clockDisplay.innerText = `${hh}:${mm}`;
+}
+setInterval(()=>{ if(mode==='real') updateClockReal(); },1000);
+
+// main simulation tick - handle movement events, arrivals/departures
+function simulationTick(){
+  const serviceCount = roster.filter(r=>r.finalStatus==='service').length;
+  const headwayMinutes = serviceCount >= 20 ? 8 : 11; // interval
+
+  roster.forEach(r=>{
+    const t = trainState[r.id];
+    if(!t) return;
+
+    // skip rejected
+    if(r.finalStatus === 'rejected') {
+      setStateText(r.id, 'Rejected');
+      return;
+    }
+
+    // skip standby
+    if(r.finalStatus === 'standby'){
+      setStateText(r.id, 'Standby');
+      return;
+    }
+
+    // service trains
+    const dir = t.direction; // 0 = Aluva, 1 = Thrippunithura
+    const endpointName = ENDPOINTS[dir];
+    const time = (mode==='demo' ? simTimeStr() : nowStr());
+
+    // ARRIVAL log
+    logArr(`[${time}] ${r.id} arrived at ${endpointName}`);
+    setBlink(r.id, 'arrived');
+    setStateText(r.id, `Arrived ${endpointName}`);
+
+    // DECISION: fault, cleaning, or no-cleaning
+    const needsCleaning = (!r.clean) || chance(0.20);
+    const rareFault = chance(FAULT_PROB);
+
+    if(rareFault){
+      // 🚨 major fault → depot
+      sendToDepot(r);
+    } 
+    else if(needsCleaning){
+      // 🧹 send to cleaning bay
+      sendToBay(r);
+      // ❌ do NOT log departure yet → departure will happen after cleaning complete
+    } 
+    else {
+      // ✅ no cleaning → immediate departure
+      logArr(`[${time}] ${r.id} departed ${endpointName} (no cleaning required)`);
+      setBlink(r.id, 'departed');
+      setStateText(r.id, `Departed ${endpointName}`);
+    }
+
+    // toggle direction for next tick
+    t.direction = 1 - t.direction;
+  });
+
+  updateBayUI();
+}
+
+// send to bay (terminal cleaning)
+function sendToBay(r){
+  // if already in bay or depot, ignore
+  if(trainState[r.id].inBay || trainState[r.id].inDepot) return;
+  trainState[r.id].inBay = true;
+  bayQueue.push(r.id);
+  const endpoint = ENDPOINTS[trainState[r.id].direction ? 1 : 0]; // we just arrived there
+  logBay(`[${mode==='demo'?simTimeStr():nowStr()}] ${r.id} sent to Cleaning Bay at ${endpoint}`);
+  setStateText(r.id, `Cleaning at ${endpoint}`);
+  setBlink(r.id,'bay');
+
+  // cleaning time depends on mode
+  const tms = (mode==='demo'?CLEANING_TIME.demo:CLEANING_TIME.real);
+  setTimeout(()=>{
+    // chance that cleaning reveals a fault
+    const fault = chance(FAULT_PROB);
+    if(fault){
+      // send to depot
+      trainState[r.id].inBay = false;
+      removeFromBay(r.id);
+      sendToDepot(r);
+    } else {
+      // cleaning done — mark clean and return to service
+      trainState[r.id].inBay = false;
+      // mark the rake as clean now
+      const rakeObj = roster.find(x=>x.id===r.id);
+      if(rakeObj) rakeObj.clean = true;
+      removeFromBay(r.id);
+      logBay(`[${mode==='demo'?simTimeStr():nowStr()}] ${r.id} cleaning completed and returned to service`);
+      setBlink(r.id,'departed');
+      setStateText(r.id,'Service (departed after cleaning)');
+      renderRoster(); // update cleanliness display
+    }
+    updateBayUI();
+  }, tms);
+}
+
+// send to depot for maintenance (major fault)
+function sendToDepot(r){
+  if(trainState[r.id].inDepot) return;
+  trainState[r.id].inDepot = true;
+  // remove from bay if present
+  trainState[r.id].inBay = false;
+  removeFromBay(r.id);
+  depotQueue.push(r.id);
+  logBay(`[${mode==='demo'?simTimeStr():nowStr()}] ${r.id} SENT TO DEPOT for maintenance (FAULT)`);
+  setStateText(r.id, 'Sent to Depot');
+  setBlink(r.id,'depot');
+  updateBayUI();
+  // For simulation, depot stay a long time: in demo we release after 30s, in real we'll keep though we'll release after 5min to show completion
+  const depotTime = (mode==='demo'?30*1000:5*60*1000);
+  setTimeout(()=>{
+    // return to service after depot maintenance (for demo)
+    trainState[r.id].inDepot = false;
+    // mark job card resolved
+    const rakeObj = roster.find(x=>x.id===r.id);
+    if(rakeObj) { rakeObj.jobOk = true; rakeObj.clean = true; }
+    // remove from depotQueue
+    const idx = depotQueue.indexOf(r.id);
+    if(idx>=0) depotQueue.splice(idx,1);
+    logBay(`[${mode==='demo'?simTimeStr():nowStr()}] ${r.id} DEPOT maintenance complete. Returned to service.`);
+    setStateText(r.id, 'Service (after Depot)');
+    renderRoster();
+    updateBayUI();
+  }, depotTime);
+}
+
+// remove from bay
+function removeFromBay(rid){
+  const idx = bayQueue.indexOf(rid);
+  if(idx>=0) bayQueue.splice(idx,1);
+}
+
+// update bay UI
+function updateBayUI(){
+  bayListEl.innerHTML = '';
+  bayQueue.forEach(id=> {
+    const r = roster.find(x=>x.id===id);
+    const div = document.createElement('div');
+    div.innerHTML = `<span class="font-semibold">${id} - ${r?r.name:''}</span> <span class="small text-gray-600"> (Cleaning)</span>`;
+    bayListEl.appendChild(div);
+  });
+  // depot
+  const depotListDiv = document.createElement('div');
+  depotListDiv.innerHTML = depotQueue.map(id=>{
+    const r = roster.find(x=>x.id===id);
+    return `<div><strong>${id} - ${r?r.name:''}</strong> <span class="small text-gray-600">(Depot)</span></div>`;
+  }).join('');
+  // show counts
+  bayCountEl.textContent = bayQueue.length;
+  depotCountEl.textContent = depotQueue.length;
+}
+
+// logging helpers
+function logArr(msg){
+  const node = document.createElement('div');
+  node.innerHTML = msg;
+  arrLogEl.prepend(node);
+}
+function logBay(msg){
+  const node = document.createElement('div');
+  node.innerHTML = msg;
+  bayLogEl.prepend(node);
+}
+
+// set blink state for a train element
+function setBlink(id, type){
+  // type: 'arrived','departed','bay','depot'
+  // apply blink to element
+  const el = document.getElementById('state-'+id);
+  if(!el) return;
+  el.classList.remove('blink');
+  if(type==='arrived' || type==='bay' || type==='depot' || type==='departed'){
+    el.classList.add('blink');
+    // remove blink after a short while so it doesn't blink forever
+    setTimeout(()=>{ el.classList.remove('blink'); }, (mode==='demo'?4000:10000));
+  }
+}
+
+// set textual state
+function setStateText(id, text){
+  const el = document.getElementById('state-'+id);
+  if(el) el.innerText = text;
+}
+
+// render initial visuals & states (for trains)
+function refreshVisuals(){
+  roster.forEach(r=>{
+    const el = document.getElementById('lv-'+r.id);
+    if(!el) return;
+    const right = document.getElementById('state-'+r.id);
+    if(!right) return;
+    // adjust color dot in roster table if needed
+    // already handled in renderRoster
+  });
+}
+function exportCSV(filename, rows) {
+  const processRow = row => row.map(v => `"${v}"`).join(",");
+  const csvContent = rows.map(processRow).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+}
+
+// Export roster
+document.getElementById("exportRoster").addEventListener("click", ()=>{
+  const rows = [["ID","Name","JobCard","Mileage","Cleanliness","Telecom","Status"]];
+  roster.forEach(r=>{
+    rows.push([r.id,r.name,r.jobOk?"OK":"Issue",r.mileage,r.clean?"Clean":"Needs Clean",r.telecom?"OK":"Issue",r.finalStatus]);
+  });
+  exportCSV(`Roster_${new Date().toISOString().slice(0,10)}.csv`,rows);
+});
+
+// Export logs
+document.getElementById("exportLogs").addEventListener("click", ()=>{
+  const arrLines = [...arrLogEl.querySelectorAll("div")].map(d=>d.innerText);
+  const bayLines = [...bayLogEl.querySelectorAll("div")].map(d=>d.innerText);
+  const rows = [["Arrival/Departure Logs"], ...arrLines.map(l=>[l]), [], ["Bay/Depot Logs"], ...bayLines.map(l=>[l])];
+  exportCSV(`Logs_${new Date().toISOString().slice(0,10)}.csv`,rows);
+});
+
+// --- Always-running clock ---
+// --- Always-running clock ---
+function startClock(){
+  setInterval(()=>{
+    if(mode==="real"){
+      const now=new Date();
+      clockDisplay.innerText=`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    } else {
+      // demo clock tick forward
+      demoSimMinute.minute++;
+      if(demoSimMinute.minute>=60){ 
+        demoSimMinute.minute=0; 
+        demoSimMinute.hour++; 
+        if(demoSimMinute.hour>=24) demoSimMinute.hour=0; 
+      }
+      clockDisplay.innerText=`${String(demoSimMinute.hour).padStart(2,"0")}:${String(demoSimMinute.minute).padStart(2,"0")}`;
+    }
+  },1000);
+}
+
+// --- Reset Demo Clock to 05:00 ---
+function resetDemoClock(){
+  demoSimMinute = {hour:5, minute:0};
+  clockDisplay.innerText = "05:00";
+}
+
+// Modify mode switch
+function setMode(m){
+  mode = m;
+  modeLabel.textContent = (m==='real'?'Real-Time':'Demo');
+  document.getElementById('realBtn').classList.toggle('opacity-50', m!=='real');
+  document.getElementById('demoBtn').classList.toggle('opacity-50', m!=='demo');
+  if(mode==='demo'){
+    resetDemoClock();
+  } else {
+    const now=new Date();
+    clockDisplay.innerText=`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+  }
+}
+
+// Modify Reset Day
+function resetDay(){
+  stopSimulation();
+  generateSchedule();
+  renderRoster();
+  renderLineVisual();
+  bayQueue = []; depotQueue = [];
+  bayListEl.innerHTML = '';
+  bayCountEl.textContent = '0';
+  depotCountEl.textContent = '0';
+  arrLogEl.innerHTML = '';
+  bayLogEl.innerHTML = '';
+  logBay("[SYS] Day reset.");
+  if(mode==='demo'){ resetDemoClock(); }
+}
+// when user navigates page, stop timers on unload
+window.addEventListener('beforeunload', ()=>{ stopSimulation(); });
+
+// final: expose small functions for debugging
+window.sendToBay = sendToBay;
+window.sendToDepot = sendToDepot;
+window.generateSchedule = generateSchedule;
+window.renderRoster = renderRoster;
+
+// ---- DARK MODE LOGIC ----
+const darkModeToggle = document.getElementById("darkModeToggle");
+const htmlEl = document.documentElement;
+
+// Apply saved theme or system preference
+if (localStorage.getItem("theme") === "dark" ||
+   (!localStorage.getItem("theme") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+  htmlEl.classList.add("dark");
+  darkModeToggle.textContent = "☀️ Light";
+}
+
+// Toggle theme on button click
+darkModeToggle.addEventListener("click", () => {
+  htmlEl.classList.toggle("dark");
+  if (htmlEl.classList.contains("dark")) {
+    localStorage.setItem("theme", "dark");
+    darkModeToggle.textContent = "☀️ Light";
+  } else {
+    localStorage.setItem("theme", "light");
+    darkModeToggle.textContent = "🌙 Dark";
+  }
+});
+</script>
+</body>
+</html>
+
